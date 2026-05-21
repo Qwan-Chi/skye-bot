@@ -14,15 +14,15 @@ This document summarizes how we work in this repository. It is intended for cont
 
 ## Build, Test, and Development Commands
 
-- `bun install`: Install dependencies.
-- `bun run dev`: Run the bot in watch mode using Bun.
-- `bun run start`: Run the bot once using Bun.
-- `bun run build`: Compile TypeScript to `dist/`.
-- `bun run typecheck`: Run TypeScript type checks without emitting output.
-- `bun run lint`: Run ESLint.
-- `bun run format`: Format files with Prettier.
+- `pnpm install`: Install dependencies.
+- `pnpm run dev`: Run the bot in watch mode using tsx.
+- `pnpm run start`: Run the bot once using tsx.
+- `pnpm run build`: Compile TypeScript to `dist/`.
+- `pnpm run typecheck`: Run TypeScript type checks without emitting output.
+- `pnpm run lint`: Run ESLint.
+- `pnpm run format`: Format files with Prettier.
 
-Compiled output is produced by `bun run build`, but local development runs TypeScript directly via Bun.
+Compiled output is produced by `pnpm run build`, but local development runs TypeScript directly via tsx.
 
 ## Coding Style & Naming Conventions
 

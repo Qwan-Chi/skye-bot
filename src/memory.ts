@@ -12,10 +12,7 @@ function generateId(): string {
 
 export function getMemories(chatId: number): MemoryEntry[] {
   return getDb()
-    .query<
-      MemoryEntry,
-      [number]
-    >("SELECT id, content, created_at AS createdAt FROM memories WHERE chat_id = ? ORDER BY created_at")
+    .prepare<[number], MemoryEntry>("SELECT id, content, created_at AS createdAt FROM memories WHERE chat_id = ? ORDER BY created_at")
     .all(chatId);
 }
 
@@ -26,18 +23,18 @@ export async function addMemory(chatId: number, content: string): Promise<Memory
     createdAt: new Date().toISOString(),
   };
   getDb()
-    .query("INSERT INTO memories (id, chat_id, content, created_at) VALUES (?, ?, ?, ?)")
+    .prepare("INSERT INTO memories (id, chat_id, content, created_at) VALUES (?, ?, ?, ?)")
     .run(entry.id, chatId, entry.content, entry.createdAt);
   return entry;
 }
 
 export async function deleteMemory(chatId: number, id: string): Promise<boolean> {
-  const result = getDb().query("DELETE FROM memories WHERE chat_id = ? AND id = ?").run(chatId, id);
+  const result = getDb().prepare("DELETE FROM memories WHERE chat_id = ? AND id = ?").run(chatId, id);
   return result.changes > 0;
 }
 
 export async function clearMemories(chatId: number): Promise<void> {
-  getDb().query("DELETE FROM memories WHERE chat_id = ?").run(chatId);
+  getDb().prepare("DELETE FROM memories WHERE chat_id = ?").run(chatId);
 }
 
 // OpenAI tool definitions

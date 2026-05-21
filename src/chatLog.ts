@@ -21,7 +21,7 @@ const chatTitles = new Map<number, string>();
 
 function getSummary(chatId: number): string {
   const row = getDb()
-    .query<{ summary: string }, [number]>("SELECT summary FROM chat_summaries WHERE chat_id = ?")
+    .prepare<[number], { summary: string }>("SELECT summary FROM chat_summaries WHERE chat_id = ?")
     .get(chatId);
   return row?.summary ?? "";
 }
@@ -84,7 +84,7 @@ export function getChatContext(
  */
 export async function setSummary(chatId: number, summary: string): Promise<void> {
   getDb()
-    .query(
+    .prepare(
       `INSERT INTO chat_summaries (chat_id, summary) VALUES (?, ?)
        ON CONFLICT(chat_id) DO UPDATE SET summary = excluded.summary`
     )

@@ -9,7 +9,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["node", "bun-types"]
+    "types": ["node"]
   },
   "include": ["src"]
 }

@@ -1,4 +1,4 @@
-import { test, expect, describe } from "bun:test";
+import { test, expect, describe } from "vitest";
 import { buildSystemMessage, SYSTEM_PROMPT } from "../prompt.js";
 import type { MemoryEntry } from "../memory.js";
 

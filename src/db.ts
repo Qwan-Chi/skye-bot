@@ -1,17 +1,17 @@
-import { Database } from "bun:sqlite";
+import Database from "better-sqlite3";
 import { mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-let _db: Database | null = null;
+let _db: Database.Database | null = null;
 
 /**
  * Lazy singleton — first call creates and migrates the DB.
  * Set process.env.DB_PATH = ":memory:" before first call in tests.
  */
-export function getDb(): Database {
+export function getDb(): Database.Database {
   if (_db) return _db;
 
   const path = process.env.DB_PATH ?? join(__dirname, "..", "data", "skye.db");
@@ -22,9 +22,8 @@ export function getDb(): Database {
   }
 
   _db = new Database(path);
+  _db.pragma("journal_mode = WAL");
   _db.exec(`
-    PRAGMA journal_mode = WAL;
-
     CREATE TABLE IF NOT EXISTS memories (
       id         TEXT    PRIMARY KEY,
       chat_id    INTEGER NOT NULL,

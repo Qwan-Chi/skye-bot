@@ -34,7 +34,7 @@ const MAX_ROWS = Number(process.env.AUDIT_MAX_ROWS ?? "100000");
 export function logRequest(entry: AuditEntry): void {
   try {
     getDb()
-      .query(
+      .prepare(
         `INSERT INTO request_logs (
           ts, chat_id, chat_type, thread_id, user_id, username, first_name,
           msg_type, command, input_len, output_len, latency_ms, model, status, error_msg
@@ -72,11 +72,11 @@ export function pruneAuditLog(): { byAge: number; byCount: number } {
   const db = getDb();
 
   const byAge = db
-    .query(`DELETE FROM request_logs WHERE ts < datetime('now', '-${RETENTION_DAYS} days')`)
+    .prepare(`DELETE FROM request_logs WHERE ts < datetime('now', '-${RETENTION_DAYS} days')`)
     .run();
 
   const byCount = db
-    .query(
+    .prepare(
       `DELETE FROM request_logs
        WHERE id NOT IN (SELECT id FROM request_logs ORDER BY id DESC LIMIT ${MAX_ROWS})`
     )

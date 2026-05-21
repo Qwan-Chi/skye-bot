@@ -1,7 +1,7 @@
 // Must be set before any module that calls getDb() is executed
 process.env.DB_PATH = ":memory:";
 
-import { test, expect, describe, beforeEach } from "bun:test";
+import { test, expect, describe, beforeEach } from "vitest";
 import {
   getChatConfig,
   setChatApiKey,

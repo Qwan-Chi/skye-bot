@@ -2,7 +2,7 @@
 
 import { ChakraProvider } from "@chakra-ui/react"
 import { useMemo, useState, useEffect, useCallback } from "react"
-import { createTelegramSystem } from "../../theme"
+import { createTelegramSystem, isDarkMode } from "../../theme"
 
 export function Provider({ children }: { children: React.ReactNode }) {
   const getParams = useCallback(() => {
@@ -21,7 +21,10 @@ export function Provider({ children }: { children: React.ReactNode }) {
     return () => window.Telegram.WebApp.offEvent("themeChanged", handler)
   }, [])
 
+  const dark = isDarkMode(themeParams.bg_color)
+  const colorMode = dark ? "dark" as const : "light" as const
+
   const system = useMemo(() => createTelegramSystem(themeParams), [themeParams])
 
-  return <ChakraProvider value={system}>{children}</ChakraProvider>
+  return <ChakraProvider value={system} colorMode={colorMode}>{children}</ChakraProvider>
 }

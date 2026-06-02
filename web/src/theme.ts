@@ -1,6 +1,6 @@
 import { createSystem, defaultConfig, defineConfig } from "@chakra-ui/react"
 
-function isDarkMode(bgColor: string | undefined): boolean {
+export function isDarkMode(bgColor: string | undefined): boolean {
   if (!bgColor) return false
   const hex = bgColor.replace("#", "")
   const r = parseInt(hex.substring(0, 2), 16)

@@ -38,8 +38,6 @@ export function App() {
 
       <Flex
         as="nav"
-        borderTopWidth="1px"
-        borderColor="border.default"
         bg="bottomBar.bg"
         px={2}
         py={1}

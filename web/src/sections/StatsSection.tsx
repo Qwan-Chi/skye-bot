@@ -52,10 +52,8 @@ export function StatsSection() {
         {statItems.map((item) => (
           <Card.Root
             key={item.label}
-            variant="outline"
             rounded="xl"
             bg="bg.muted"
-            borderColor="border.default"
           >
             <Card.Body p={4}>
               <Stack gap={1}>

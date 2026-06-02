@@ -56,10 +56,8 @@ export function MemorySection() {
           memories.map((m) => (
             <Card.Root
               key={m.id}
-              variant="outline"
               rounded="xl"
               bg="bg.muted"
-              borderColor="border.default"
             >
               <Card.Body p={4}>
                 <HStack justify="space-between" align="start" gap={3}>
@@ -73,16 +71,13 @@ export function MemorySection() {
                   </Stack>
                   <Button
                     size="xs"
-                    variant="outline"
+                    variant="ghost"
                     onClick={() => {
                       const chatId = Number(m.id.split("_")[0]) || 0;
                       handleDelete(chatId, m.id);
                     }}
                     rounded="lg"
-                    borderColor="danger.default"
                     color="danger.default"
-                    bg="transparent"
-                    _hover={{ bg: "bg.default" }}
                   >
                     Delete
                   </Button>

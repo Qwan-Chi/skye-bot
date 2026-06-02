@@ -102,6 +102,7 @@ export function ConfigSection() {
           <Field.Root>
             <Field.Label>Max Tokens</Field.Label>
             <Slider.Root
+              w="full"
               min={100}
               max={4096}
               step={100}
@@ -110,7 +111,7 @@ export function ConfigSection() {
                 update({ maxTokens: details.value[0] })
               }
             >
-              <Slider.Control>
+              <Slider.Control w="full">
                 <Slider.Track bg="bg.default" rounded="full" h={2}>
                   <Slider.Range bg="accent.default" rounded="full" />
                 </Slider.Track>

@@ -289,10 +289,6 @@ export function McpSection() {
               setEditingId(null);
             }}
             rounded="xl"
-            borderColor="accent.default"
-            color="accent.default"
-            bg="transparent"
-            _hover={{ bg: "bg.muted" }}
           >
             Cancel
           </Button>
@@ -335,10 +331,8 @@ export function McpSection() {
           servers.map((server) => (
             <Card.Root
               key={server.id}
-              variant="outline"
               rounded="xl"
               bg="bg.muted"
-              borderColor="border.default"
             >
               <Card.Body p={4}>
                 <HStack justify="space-between" align="start" gap={3}>
@@ -367,25 +361,19 @@ export function McpSection() {
                   <HStack gap={2}>
                     <Button
                       size="xs"
-                      variant="outline"
+                      variant="ghost"
                       onClick={() => openEdit(server)}
                       rounded="lg"
-                      borderColor="accent.default"
                       color="accent.default"
-                      bg="transparent"
-                      _hover={{ bg: "bg.default" }}
                     >
                       Edit
                     </Button>
                     <Button
                       size="xs"
-                      variant="outline"
+                      variant="ghost"
                       onClick={() => handleDelete(server)}
                       rounded="lg"
-                      borderColor="danger.default"
                       color="danger.default"
-                      bg="transparent"
-                      _hover={{ bg: "bg.default" }}
                     >
                       Delete
                     </Button>

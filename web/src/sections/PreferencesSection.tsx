@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Stack, Box, Button, Text, Heading, Switch, Textarea } from "@chakra-ui/react";
+import { Stack, HStack, Box, Button, Text, Heading, Switch, Textarea } from "@chakra-ui/react";
 import { Field } from "@chakra-ui/react";
 import { api, type UserConfig, type ChatConfig } from "../api";
 
@@ -62,8 +62,8 @@ export function PreferencesSection() {
   }
 
   return (
-    <Stack gap={6}>
-      <Box>
+    <Stack gap={5}>
+      <Box bg="bg.muted" rounded="2xl" p={4}>
         <Heading size="sm" mb={1}>
           Chat Toggles
         </Heading>
@@ -72,8 +72,8 @@ export function PreferencesSection() {
         </Text>
 
         <Stack gap={4}>
-          <Stack direction="row" justify="space-between" align="start">
-            <Stack gap={0.5}>
+          <HStack justify="space-between" align="start">
+            <Stack gap={0.5} flex={1}>
               <Text fontWeight="medium">Fast Mode</Text>
               <Text fontSize="sm" color="fg.muted">
                 Use local Ollama for ultra-low latency responses
@@ -88,10 +88,10 @@ export function PreferencesSection() {
                 <Switch.Thumb />
               </Switch.Control>
             </Switch.Root>
-          </Stack>
+          </HStack>
 
-          <Stack direction="row" justify="space-between" align="start">
-            <Stack gap={0.5}>
+          <HStack justify="space-between" align="start">
+            <Stack gap={0.5} flex={1}>
               <Text fontWeight="medium">Voice Mode</Text>
               <Text fontSize="sm" color="fg.muted">
                 Send responses as voice notes via ElevenLabs TTS
@@ -106,11 +106,11 @@ export function PreferencesSection() {
                 <Switch.Thumb />
               </Switch.Control>
             </Switch.Root>
-          </Stack>
+          </HStack>
         </Stack>
       </Box>
 
-      <Box>
+      <Box bg="bg.muted" rounded="2xl" p={4}>
         <Heading size="sm" mb={1}>
           System Prompt
         </Heading>
@@ -127,6 +127,8 @@ export function PreferencesSection() {
             }
             placeholder="e.g. Always respond in Spanish. Be more formal."
             rows={5}
+            rounded="lg"
+            bg="bg.default"
           />
           <Field.HelperText>
             Append to the default system prompt
@@ -136,10 +138,15 @@ export function PreferencesSection() {
 
       {dirty && (
         <Button
-          colorPalette="teal"
+          bg="accent.default"
+          color="accent.fg"
+          rounded="xl"
+          size="lg"
           onClick={save}
           disabled={saving}
           loading={saving}
+          _hover={{ opacity: 0.9 }}
+          _active={{ opacity: 0.8 }}
         >
           {saving ? "Saving..." : "Save Changes"}
         </Button>

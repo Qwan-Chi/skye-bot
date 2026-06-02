@@ -36,7 +36,7 @@ export function MemorySection() {
   }
 
   return (
-    <Stack gap={6}>
+    <Stack gap={5}>
       <Box>
         <Heading size="sm" mb={1}>
           Saved Memories
@@ -54,8 +54,14 @@ export function MemorySection() {
           </Text>
         ) : (
           memories.map((m) => (
-            <Card.Root key={m.id} variant="outline">
-              <Card.Body p={3}>
+            <Card.Root
+              key={m.id}
+              variant="outline"
+              rounded="xl"
+              bg="bg.muted"
+              borderColor="border.default"
+            >
+              <Card.Body p={4}>
                 <HStack justify="space-between" align="start" gap={3}>
                   <Stack gap={1} flex={1}>
                     <Text fontSize="sm" lineHeight="short">
@@ -68,11 +74,15 @@ export function MemorySection() {
                   <Button
                     size="xs"
                     variant="outline"
-                    colorPalette="red"
                     onClick={() => {
                       const chatId = Number(m.id.split("_")[0]) || 0;
                       handleDelete(chatId, m.id);
                     }}
+                    rounded="lg"
+                    borderColor="danger.default"
+                    color="danger.default"
+                    bg="transparent"
+                    _hover={{ bg: "bg.default" }}
                   >
                     Delete
                   </Button>

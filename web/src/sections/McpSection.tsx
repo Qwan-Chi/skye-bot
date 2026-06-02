@@ -158,113 +158,127 @@ export function McpSection() {
 
   if (showForm) {
     return (
-      <Stack gap={6}>
+      <Stack gap={5}>
         <Heading size="sm">
           {editingId ? "Edit Server" : "Add MCP Server"}
         </Heading>
 
-        <Stack gap={4}>
-          <Field.Root>
-            <Field.Label>Name</Field.Label>
-            <Input
-              value={form.name}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, name: e.target.value }))
-              }
-              placeholder="my-server"
-            />
-          </Field.Root>
+        <Box bg="bg.muted" rounded="2xl" p={4}>
+          <Stack gap={4}>
+            <Field.Root>
+              <Field.Label>Name</Field.Label>
+              <Input
+                value={form.name}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
+                placeholder="my-server"
+                rounded="lg"
+                bg="bg.default"
+              />
+            </Field.Root>
 
-          <Box>
-            <Text fontSize="sm" fontWeight="medium" mb={2}>
-              Type
-            </Text>
-            <RadioGroup.Root
-              value={form.type}
-              onValueChange={(details) =>
-                setForm((f) => ({ ...f, type: details.value as "http" | "stdio" }))
-              }
-            >
-              <HStack gap={4}>
-                <RadioGroup.Item value="http">
-                  <RadioGroup.ItemHiddenInput />
-                  <RadioGroup.ItemControl />
-                  <RadioGroup.ItemText>HTTP</RadioGroup.ItemText>
-                </RadioGroup.Item>
-                <RadioGroup.Item value="stdio">
-                  <RadioGroup.ItemHiddenInput />
-                  <RadioGroup.ItemControl />
-                  <RadioGroup.ItemText>Stdio</RadioGroup.ItemText>
-                </RadioGroup.Item>
-              </HStack>
-            </RadioGroup.Root>
-          </Box>
+            <Box>
+              <Text fontSize="sm" fontWeight="medium" mb={2}>
+                Type
+              </Text>
+              <RadioGroup.Root
+                value={form.type}
+                onValueChange={(details) =>
+                  setForm((f) => ({ ...f, type: details.value as "http" | "stdio" }))
+                }
+              >
+                <HStack gap={4}>
+                  <RadioGroup.Item value="http">
+                    <RadioGroup.ItemHiddenInput />
+                    <RadioGroup.ItemControl />
+                    <RadioGroup.ItemText>HTTP</RadioGroup.ItemText>
+                  </RadioGroup.Item>
+                  <RadioGroup.Item value="stdio">
+                    <RadioGroup.ItemHiddenInput />
+                    <RadioGroup.ItemControl />
+                    <RadioGroup.ItemText>Stdio</RadioGroup.ItemText>
+                  </RadioGroup.Item>
+                </HStack>
+              </RadioGroup.Root>
+            </Box>
 
-          {form.type === "http" ? (
-            <>
-              <Field.Root>
-                <Field.Label>URL</Field.Label>
-                <Input
-                  type="url"
-                  value={form.url}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, url: e.target.value }))
-                  }
-                  placeholder="https://example.com/mcp"
-                />
-              </Field.Root>
-              <Field.Root>
-                <Field.Label>Headers (JSON)</Field.Label>
-                <Textarea
-                  value={form.headers}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, headers: e.target.value }))
-                  }
-                  placeholder='{"Authorization": "Bearer token"}'
-                  rows={3}
-                />
-                <Field.HelperText>
-                  e.g. {"{"}"Authorization": "Bearer ..."{"}"}
-                </Field.HelperText>
-              </Field.Root>
-            </>
-          ) : (
-            <>
-              <Field.Root>
-                <Field.Label>Command</Field.Label>
-                <Input
-                  value={form.command}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, command: e.target.value }))
-                  }
-                  placeholder="npx"
-                />
-              </Field.Root>
-              <Field.Root>
-                <Field.Label>Args (JSON array or space-separated)</Field.Label>
-                <Input
-                  value={form.args}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, args: e.target.value }))
-                  }
-                  placeholder='["-y", "my-mcp-server"]'
-                />
-              </Field.Root>
-              <Field.Root>
-                <Field.Label>Environment (JSON)</Field.Label>
-                <Textarea
-                  value={form.env}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, env: e.target.value }))
-                  }
-                  placeholder='{"API_KEY": "..."}'
-                  rows={3}
-                />
-                <Field.HelperText>Additional env vars</Field.HelperText>
-              </Field.Root>
-            </>
-          )}
-        </Stack>
+            {form.type === "http" ? (
+              <>
+                <Field.Root>
+                  <Field.Label>URL</Field.Label>
+                  <Input
+                    type="url"
+                    value={form.url}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, url: e.target.value }))
+                    }
+                    placeholder="https://example.com/mcp"
+                    rounded="lg"
+                    bg="bg.default"
+                  />
+                </Field.Root>
+                <Field.Root>
+                  <Field.Label>Headers (JSON)</Field.Label>
+                  <Textarea
+                    value={form.headers}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, headers: e.target.value }))
+                    }
+                    placeholder='{"Authorization": "Bearer token"}'
+                    rows={3}
+                    rounded="lg"
+                    bg="bg.default"
+                  />
+                  <Field.HelperText>
+                    e.g. {"{"}"Authorization": "Bearer ..."{"}"}
+                  </Field.HelperText>
+                </Field.Root>
+              </>
+            ) : (
+              <>
+                <Field.Root>
+                  <Field.Label>Command</Field.Label>
+                  <Input
+                    value={form.command}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, command: e.target.value }))
+                    }
+                    placeholder="npx"
+                    rounded="lg"
+                    bg="bg.default"
+                  />
+                </Field.Root>
+                <Field.Root>
+                  <Field.Label>Args (JSON array or space-separated)</Field.Label>
+                  <Input
+                    value={form.args}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, args: e.target.value }))
+                    }
+                    placeholder='["-y", "my-mcp-server"]'
+                    rounded="lg"
+                    bg="bg.default"
+                  />
+                </Field.Root>
+                <Field.Root>
+                  <Field.Label>Environment (JSON)</Field.Label>
+                  <Textarea
+                    value={form.env}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, env: e.target.value }))
+                    }
+                    placeholder='{"API_KEY": "..."}'
+                    rows={3}
+                    rounded="lg"
+                    bg="bg.default"
+                  />
+                  <Field.HelperText>Additional env vars</Field.HelperText>
+                </Field.Root>
+              </>
+            )}
+          </Stack>
+        </Box>
 
         <HStack gap={3}>
           <Button
@@ -274,15 +288,24 @@ export function McpSection() {
               setShowForm(false);
               setEditingId(null);
             }}
+            rounded="xl"
+            borderColor="accent.default"
+            color="accent.default"
+            bg="transparent"
+            _hover={{ bg: "bg.muted" }}
           >
             Cancel
           </Button>
           <Button
-            colorPalette="teal"
             flex={1}
             onClick={handleSave}
             disabled={saving}
             loading={saving}
+            rounded="xl"
+            bg="accent.default"
+            color="accent.fg"
+            _hover={{ opacity: 0.9 }}
+            _active={{ opacity: 0.8 }}
           >
             {saving ? "Saving..." : "Save"}
           </Button>
@@ -292,7 +315,7 @@ export function McpSection() {
   }
 
   return (
-    <Stack gap={6}>
+    <Stack gap={5}>
       <Box>
         <Heading size="sm" mb={1}>
           MCP Servers
@@ -310,16 +333,25 @@ export function McpSection() {
           </Text>
         ) : (
           servers.map((server) => (
-            <Card.Root key={server.id} variant="outline">
-              <Card.Body p={3}>
-                <HStack justify="space-between" align="start">
-                  <Stack gap={0.5} flex={1}>
+            <Card.Root
+              key={server.id}
+              variant="outline"
+              rounded="xl"
+              bg="bg.muted"
+              borderColor="border.default"
+            >
+              <Card.Body p={4}>
+                <HStack justify="space-between" align="start" gap={3}>
+                  <Stack gap={1} flex={1}>
                     <HStack gap={2} align="center">
                       <Text fontWeight="semibold">{server.name}</Text>
                       <Badge
                         size="sm"
-                        colorPalette={server.connected ? "green" : "red"}
-                        variant="solid"
+                        rounded="full"
+                        px={2}
+                        py={0.5}
+                        bg={server.connected ? "green.500" : "red.500"}
+                        color="white"
                       >
                         {server.connected ? "Connected" : "Disconnected"}
                       </Badge>
@@ -337,14 +369,23 @@ export function McpSection() {
                       size="xs"
                       variant="outline"
                       onClick={() => openEdit(server)}
+                      rounded="lg"
+                      borderColor="accent.default"
+                      color="accent.default"
+                      bg="transparent"
+                      _hover={{ bg: "bg.default" }}
                     >
                       Edit
                     </Button>
                     <Button
                       size="xs"
                       variant="outline"
-                      colorPalette="red"
                       onClick={() => handleDelete(server)}
+                      rounded="lg"
+                      borderColor="danger.default"
+                      color="danger.default"
+                      bg="transparent"
+                      _hover={{ bg: "bg.default" }}
                     >
                       Delete
                     </Button>
@@ -356,7 +397,16 @@ export function McpSection() {
         )}
       </Stack>
 
-      <Button colorPalette="teal" onClick={openAdd} w="full">
+      <Button
+        bg="accent.default"
+        color="accent.fg"
+        rounded="xl"
+        size="lg"
+        onClick={openAdd}
+        w="full"
+        _hover={{ opacity: 0.9 }}
+        _active={{ opacity: 0.8 }}
+      >
         + Add Server
       </Button>
     </Stack>

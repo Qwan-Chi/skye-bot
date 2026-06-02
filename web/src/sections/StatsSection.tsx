@@ -33,12 +33,12 @@ export function StatsSection() {
     {
       label: "Error Rate",
       value: `${(stats.errorRate * 100).toFixed(1)}%`,
-      color: stats.errorRate > 0.1 ? "red.500" : undefined,
+      color: stats.errorRate > 0.1 ? "danger.default" : undefined,
     },
   ];
 
   return (
-    <Stack gap={6}>
+    <Stack gap={5}>
       <Box>
         <Heading size="sm" mb={1}>
           Usage Statistics
@@ -50,8 +50,14 @@ export function StatsSection() {
 
       <SimpleGrid columns={2} gap={3}>
         {statItems.map((item) => (
-          <Card.Root key={item.label} variant="outline">
-            <Card.Body p={3}>
+          <Card.Root
+            key={item.label}
+            variant="outline"
+            rounded="xl"
+            bg="bg.muted"
+            borderColor="border.default"
+          >
+            <Card.Body p={4}>
               <Stack gap={1}>
                 <Text fontSize="xs" color="fg.muted" fontWeight="medium">
                   {item.label}

@@ -43,9 +43,9 @@ export function ConfigSection() {
   }
 
   return (
-    <Stack gap={6}>
-      <Box>
-        <Heading size="sm" mb={2}>
+    <Stack gap={5}>
+      <Box bg="bg.muted" rounded="2xl" p={4}>
+        <Heading size="sm" mb={1}>
           API Configuration
         </Heading>
         <Text fontSize="sm" color="fg.muted" mb={4}>
@@ -62,6 +62,8 @@ export function ConfigSection() {
                 update({ apiKey: e.target.value || undefined })
               }
               placeholder="sk-..."
+              rounded="lg"
+              bg="bg.default"
             />
             <Field.HelperText>
               Your OpenAI-compatible API key
@@ -77,6 +79,8 @@ export function ConfigSection() {
                 update({ baseUrl: e.target.value || undefined })
               }
               placeholder="https://openrouter.ai/api/v1"
+              rounded="lg"
+              bg="bg.default"
             />
             <Field.HelperText>API endpoint (default: OpenRouter)</Field.HelperText>
           </Field.Root>
@@ -89,6 +93,8 @@ export function ConfigSection() {
                 update({ model: e.target.value || undefined })
               }
               placeholder="openai/gpt-oss-120b"
+              rounded="lg"
+              bg="bg.default"
             />
             <Field.HelperText>Model ID (e.g. openai/gpt-oss-120b)</Field.HelperText>
           </Field.Root>
@@ -105,10 +111,18 @@ export function ConfigSection() {
               }
             >
               <Slider.Control>
-                <Slider.Track bg="bg.emphasized">
-                  <Slider.Range bg="teal.500" />
+                <Slider.Track bg="bg.default" rounded="full" h={2}>
+                  <Slider.Range bg="accent.default" rounded="full" />
                 </Slider.Track>
-                <Slider.Thumb index={0} />
+                <Slider.Thumb
+                  index={0}
+                  boxSize={5}
+                  bg="accent.default"
+                  borderWidth={2}
+                  borderColor="bg.default"
+                  rounded="full"
+                  shadow="md"
+                />
               </Slider.Control>
             </Slider.Root>
             <Text fontSize="sm" color="fg.muted" textAlign="right" mt={1}>
@@ -120,10 +134,15 @@ export function ConfigSection() {
 
       {dirty && (
         <Button
-          colorPalette="teal"
+          bg="accent.default"
+          color="accent.fg"
+          rounded="xl"
+          size="lg"
           onClick={save}
           disabled={saving}
           loading={saving}
+          _hover={{ opacity: 0.9 }}
+          _active={{ opacity: 0.8 }}
         >
           {saving ? "Saving..." : "Save Changes"}
         </Button>

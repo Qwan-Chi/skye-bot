@@ -10,7 +10,7 @@ window.Telegram.WebApp.expand();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Provider defaultTheme={window.Telegram.WebApp.colorScheme}>
+    <Provider>
       <App />
       <Toaster />
     </Provider>

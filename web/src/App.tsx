@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Box, Flex, Text } from "@chakra-ui/react";
 import {
   LuKey,
@@ -7,7 +7,6 @@ import {
   LuBrain,
   LuChartBar,
 } from "react-icons/lu";
-import { useColorMode } from "./components/ui/color-mode";
 import { ConfigSection } from "./sections/ConfigSection";
 import { McpSection } from "./sections/McpSection";
 import { PreferencesSection } from "./sections/PreferencesSection";
@@ -24,29 +23,12 @@ const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "stats", label: "Stats", icon: LuChartBar },
 ];
 
-function TelegramThemeSync() {
-  const { setColorMode } = useColorMode();
-
-  useEffect(() => {
-    const tg = window.Telegram.WebApp;
-    const sync = () => {
-      setColorMode(tg.colorScheme === "dark" ? "dark" : "light");
-    };
-    sync();
-    tg.onEvent("themeChanged", sync);
-    return () => tg.offEvent("themeChanged", sync);
-  }, [setColorMode]);
-
-  return null;
-}
-
 export function App() {
   const [tab, setTab] = useState<Tab>("config");
 
   return (
-    <Box h="100dvh" display="flex" flexDirection="column" bg="bg.subtle">
-      <TelegramThemeSync />
-      <Box flex="1" overflowY="auto" p={4}>
+    <Box h="100dvh" display="flex" flexDirection="column" bg="bg.default">
+      <Box flex="1" overflowY="auto" p={3}>
         {tab === "config" && <ConfigSection />}
         {tab === "mcp" && <McpSection />}
         {tab === "prefs" && <PreferencesSection />}
@@ -57,8 +39,8 @@ export function App() {
       <Flex
         as="nav"
         borderTopWidth="1px"
-        borderColor="border.subtle"
-        bg="bg.default"
+        borderColor="border.default"
+        bg="bottomBar.bg"
         px={2}
         py={1}
         justify="space-around"
@@ -78,8 +60,12 @@ export function App() {
               flex={1}
               cursor="pointer"
               onClick={() => setTab(t.id)}
-              color={active ? "teal.500" : "fg.muted"}
-              _hover={{ color: active ? "teal.500" : "fg.default" }}
+              color={active ? "accent.default" : "fg.muted"}
+              _hover={{ color: active ? "accent.default" : "fg.default" }}
+              rounded="lg"
+              py={1}
+              px={2}
+              transition="color 0.2s"
             >
               <t.icon size={20} />
               <Text fontSize="xs" fontWeight={active ? "semibold" : "normal"}>

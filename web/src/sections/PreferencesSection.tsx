@@ -1,6 +1,15 @@
 import { useState, useEffect } from "react";
+import {
+  List,
+  Section,
+  Cell,
+  Switch,
+  Textarea,
+  Button,
+  Subheadline,
+  Text,
+} from "@telegram-apps/telegram-ui";
 import { api, type UserConfig, type ChatConfig } from "../api";
-import { SectionHeader, Field } from "./ConfigSection";
 
 export function PreferencesSection() {
   const [config, setConfig] = useState<UserConfig>({});
@@ -49,82 +58,78 @@ export function PreferencesSection() {
     }
   };
 
-  if (loading) return <div className="py-8 text-center text-tg-hint">Loading...</div>;
+  if (loading) {
+    return (
+      <List>
+        <Section>
+          <Cell>
+            <Text>Loading...</Text>
+          </Cell>
+        </Section>
+      </List>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <SectionHeader title="Chat Toggles" subtitle="Per-chat behavior settings" />
+    <List>
+      <Section header="Chat Toggles" footer="Per-chat behavior settings">
+        <Cell
+          after={
+            <Switch
+              checked={chatConfig.fastMode}
+              onChange={() => toggleChat("fastMode")}
+            />
+          }
+        >
+          <Subheadline>Fast Mode</Subheadline>
+          <Text style={{ fontSize: "12px", opacity: 0.6, marginTop: "2px" }}>
+            Use local Ollama for ultra-low latency responses
+          </Text>
+        </Cell>
 
-      <Toggle
-        label="Fast Mode"
-        description="Use local Ollama for ultra-low latency responses"
-        checked={chatConfig.fastMode}
-        onChange={() => toggleChat("fastMode")}
-      />
+        <Cell
+          after={
+            <Switch
+              checked={chatConfig.voiceMode}
+              onChange={() => toggleChat("voiceMode")}
+            />
+          }
+        >
+          <Subheadline>Voice Mode</Subheadline>
+          <Text style={{ fontSize: "12px", opacity: 0.6, marginTop: "2px" }}>
+            Send responses as voice notes via ElevenLabs TTS
+          </Text>
+        </Cell>
+      </Section>
 
-      <Toggle
-        label="Voice Mode"
-        description="Send responses as voice notes via ElevenLabs TTS"
-        checked={chatConfig.voiceMode}
-        onChange={() => toggleChat("voiceMode")}
-      />
-
-      <div className="border-t border-tg-section-separator pt-6">
-        <SectionHeader title="System Prompt" subtitle="Customize the bot's personality" />
-
-        <Field label="Custom Instructions" hint="Append to the default system prompt">
-          <textarea
+      <Section header="System Prompt" footer="Customize the bot's personality">
+        <Cell>
+          <Subheadline>Custom Instructions</Subheadline>
+          <Textarea
             value={config.systemPrompt ?? ""}
             onChange={(e) => updateConfig({ systemPrompt: e.target.value || undefined })}
             placeholder="e.g. Always respond in Spanish. Be more formal."
             rows={5}
-            className="w-full rounded-lg bg-tg-secondary-bg px-3 py-2.5 text-sm text-tg-text outline-none placeholder:text-tg-hint focus:ring-1 focus:ring-tg-accent"
           />
-        </Field>
-      </div>
+          <Text style={{ fontSize: "12px", opacity: 0.6, marginTop: "4px" }}>
+            Append to the default system prompt
+          </Text>
+        </Cell>
+      </Section>
 
       {dirty && (
-        <button
-          onClick={save}
-          disabled={saving}
-          className="w-full rounded-lg bg-tg-button py-3 text-sm font-medium text-tg-button-text transition-opacity disabled:opacity-50"
-        >
-          {saving ? "Saving..." : "Save Changes"}
-        </button>
+        <Section>
+          <Button
+            size="l"
+            stretched
+            mode="filled"
+            onClick={save}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save Changes"}
+          </Button>
+        </Section>
       )}
-    </div>
-  );
-}
-
-function Toggle({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-lg bg-tg-section-bg p-3">
-      <div>
-        <div className="text-sm font-medium text-tg-text">{label}</div>
-        <div className="mt-0.5 text-xs text-tg-hint">{description}</div>
-      </div>
-      <button
-        onClick={onChange}
-        className={`relative h-7 w-12 rounded-full transition-colors ${
-          checked ? "bg-tg-button" : "bg-tg-secondary-bg"
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
-            checked ? "translate-x-5.5" : "translate-x-0.5"
-          }`}
-        />
-      </button>
-    </div>
+    </List>
   );
 }

@@ -1,6 +1,17 @@
 import { useState, useEffect } from "react";
+import {
+  List,
+  Section,
+  Cell,
+  Button,
+  Input,
+  Textarea,
+  Radio,
+  Badge,
+  Subheadline,
+  Text,
+} from "@telegram-apps/telegram-ui";
 import { api, type McpServer } from "../api";
-import { SectionHeader, Field } from "./ConfigSection";
 
 type ServerForm = {
   name: string;
@@ -87,8 +98,8 @@ export function McpSection() {
   };
 
   const openEdit = (server: McpServer) => {
-    const form = configToForm(server.config);
-    setForm({ ...form, name: server.name });
+    const formData = configToForm(server.config);
+    setForm({ ...formData, name: server.name });
     setEditingId(server.id);
     setShowForm(true);
   };
@@ -132,176 +143,184 @@ export function McpSection() {
     });
   };
 
-  if (loading) return <div className="py-8 text-center text-tg-hint">Loading...</div>;
+  if (loading) {
+    return (
+      <List>
+        <Section>
+          <Cell>
+            <Text>Loading...</Text>
+          </Cell>
+        </Section>
+      </List>
+    );
+  }
 
   if (showForm) {
     return (
-      <div className="space-y-4">
-        <SectionHeader
-          title={editingId ? "Edit Server" : "Add MCP Server"}
-          subtitle={editingId ? "Update server configuration" : "Connect a new MCP server"}
-        />
+      <List>
+        <Section header={editingId ? "Edit Server" : "Add MCP Server"}>
+          <Cell>
+            <Subheadline>Name</Subheadline>
+            <Input
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="my-server"
+            />
+          </Cell>
 
-        <Field label="Name">
-          <input
-            type="text"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="my-server"
-            className="w-full rounded-lg bg-tg-secondary-bg px-3 py-2.5 text-sm text-tg-text outline-none placeholder:text-tg-hint focus:ring-1 focus:ring-tg-accent"
-          />
-        </Field>
+          <Cell>
+            <Subheadline>Type</Subheadline>
+            <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+              <Radio
+                checked={form.type === "http"}
+                onChange={() => setForm((f) => ({ ...f, type: "http" }))}
+              >
+                HTTP
+              </Radio>
+              <Radio
+                checked={form.type === "stdio"}
+                onChange={() => setForm((f) => ({ ...f, type: "stdio" }))}
+              >
+                Stdio
+              </Radio>
+            </div>
+          </Cell>
 
-        <div className="flex gap-2">
-          {(["http", "stdio"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setForm((f) => ({ ...f, type: t }))}
-              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-                form.type === t
-                  ? "bg-tg-button text-tg-button-text"
-                  : "bg-tg-secondary-bg text-tg-hint"
-              }`}
+          {form.type === "http" ? (
+            <>
+              <Cell>
+                <Subheadline>URL</Subheadline>
+                <Input
+                  type="url"
+                  value={form.url}
+                  onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
+                  placeholder="https://example.com/mcp"
+                />
+              </Cell>
+              <Cell>
+                <Subheadline>Headers (JSON)</Subheadline>
+                <Textarea
+                  value={form.headers}
+                  onChange={(e) => setForm((f) => ({ ...f, headers: e.target.value }))}
+                  placeholder='{"Authorization": "Bearer token"}'
+                  rows={3}
+                />
+                <Text style={{ fontSize: "12px", opacity: 0.6, marginTop: "4px" }}>
+                  e.g. {"{"}"Authorization": "Bearer ..."{"}"}
+                </Text>
+              </Cell>
+            </>
+          ) : (
+            <>
+              <Cell>
+                <Subheadline>Command</Subheadline>
+                <Input
+                  value={form.command}
+                  onChange={(e) => setForm((f) => ({ ...f, command: e.target.value }))}
+                  placeholder="npx"
+                />
+              </Cell>
+              <Cell>
+                <Subheadline>Args (JSON array or space-separated)</Subheadline>
+                <Input
+                  value={form.args}
+                  onChange={(e) => setForm((f) => ({ ...f, args: e.target.value }))}
+                  placeholder='["-y", "my-mcp-server"]'
+                />
+              </Cell>
+              <Cell>
+                <Subheadline>Environment (JSON)</Subheadline>
+                <Textarea
+                  value={form.env}
+                  onChange={(e) => setForm((f) => ({ ...f, env: e.target.value }))}
+                  placeholder='{"API_KEY": "..."}'
+                  rows={3}
+                />
+                <Text style={{ fontSize: "12px", opacity: 0.6, marginTop: "4px" }}>
+                  Additional env vars
+                </Text>
+              </Cell>
+            </>
+          )}
+        </Section>
+
+        <Section>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Button
+              size="l"
+              stretched
+              mode="bezeled"
+              onClick={() => {
+                setShowForm(false);
+                setEditingId(null);
+              }}
             >
-              {t === "http" ? "HTTP" : "Stdio"}
-            </button>
-          ))}
-        </div>
-
-        {form.type === "http" ? (
-          <>
-            <Field label="URL">
-              <input
-                type="url"
-                value={form.url}
-                onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
-                placeholder="https://example.com/mcp"
-                className="w-full rounded-lg bg-tg-secondary-bg px-3 py-2.5 text-sm text-tg-text outline-none placeholder:text-tg-hint focus:ring-1 focus:ring-tg-accent"
-              />
-            </Field>
-            <Field label="Headers (JSON)" hint='e.g. {"Authorization": "Bearer ..."}'>
-              <textarea
-                value={form.headers}
-                onChange={(e) => setForm((f) => ({ ...f, headers: e.target.value }))}
-                placeholder='{"Authorization": "Bearer token"}'
-                rows={3}
-                className="w-full rounded-lg bg-tg-secondary-bg px-3 py-2.5 font-mono text-xs text-tg-text outline-none placeholder:text-tg-hint focus:ring-1 focus:ring-tg-accent"
-              />
-            </Field>
-          </>
-        ) : (
-          <>
-            <Field label="Command">
-              <input
-                type="text"
-                value={form.command}
-                onChange={(e) => setForm((f) => ({ ...f, command: e.target.value }))}
-                placeholder="npx"
-                className="w-full rounded-lg bg-tg-secondary-bg px-3 py-2.5 text-sm text-tg-text outline-none placeholder:text-tg-hint focus:ring-1 focus:ring-tg-accent"
-              />
-            </Field>
-            <Field label="Args (JSON array or space-separated)">
-              <input
-                type="text"
-                value={form.args}
-                onChange={(e) => setForm((f) => ({ ...f, args: e.target.value }))}
-                placeholder='["-y", "my-mcp-server"]'
-                className="w-full rounded-lg bg-tg-secondary-bg px-3 py-2.5 font-mono text-xs text-tg-text outline-none placeholder:text-tg-hint focus:ring-1 focus:ring-tg-accent"
-              />
-            </Field>
-            <Field label="Environment (JSON)" hint="Additional env vars">
-              <textarea
-                value={form.env}
-                onChange={(e) => setForm((f) => ({ ...f, env: e.target.value }))}
-                placeholder='{"API_KEY": "..."}'
-                rows={3}
-                className="w-full rounded-lg bg-tg-secondary-bg px-3 py-2.5 font-mono text-xs text-tg-text outline-none placeholder:text-tg-hint focus:ring-1 focus:ring-tg-accent"
-              />
-            </Field>
-          </>
-        )}
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              setShowForm(false);
-              setEditingId(null);
-            }}
-            className="flex-1 rounded-lg bg-tg-secondary-bg py-2.5 text-sm font-medium text-tg-text"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 rounded-lg bg-tg-button py-2.5 text-sm font-medium text-tg-button-text disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </div>
+              Cancel
+            </Button>
+            <Button
+              size="l"
+              stretched
+              mode="filled"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </Section>
+      </List>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <SectionHeader title="MCP Servers" subtitle={`${servers.length} server(s) configured`} />
-        <button
-          onClick={openAdd}
-          className="rounded-lg bg-tg-button px-3 py-1.5 text-xs font-medium text-tg-button-text"
-        >
-          + Add
-        </button>
-      </div>
-
-      {servers.length === 0 ? (
-        <div className="rounded-lg bg-tg-section-bg p-6 text-center text-sm text-tg-hint">
-          No MCP servers configured. Add one to extend the bot with external tools.
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {servers.map((server) => (
-            <div
+    <List>
+      <Section
+        header="MCP Servers"
+        footer={`${servers.length} server(s) configured`}
+      >
+        {servers.length === 0 ? (
+          <Cell>
+            <Text style={{ opacity: 0.6 }}>
+              No MCP servers configured. Add one to extend the bot with external tools.
+            </Text>
+          </Cell>
+        ) : (
+          servers.map((server) => (
+            <Cell
               key={server.id}
-              className="rounded-lg bg-tg-section-bg p-3"
+              after={
+                <Badge type="dot" mode="primary" style={{ backgroundColor: server.connected ? "#34c759" : "#ff3b30" }} />
+              }
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-tg-text">{server.name}</span>
-                    <span
-                      className={`inline-block h-2 w-2 rounded-full ${
-                        server.connected ? "bg-green-500" : "bg-red-400"
-                      }`}
-                    />
-                  </div>
-                  <div className="mt-0.5 text-xs text-tg-hint">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                <div style={{ flex: 1 }}>
+                  <Subheadline>{server.name}</Subheadline>
+                  <Text style={{ fontSize: "12px", opacity: 0.6, marginTop: "2px" }}>
                     {server.config.type === "http" || server.config.url
                       ? `HTTP: ${server.config.url}`
                       : `Stdio: ${server.config.command}`}
                     {server.toolCount != null && ` · ${server.toolCount} tools`}
-                  </div>
+                  </Text>
                 </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => openEdit(server)}
-                    className="rounded px-2 py-1 text-xs text-tg-link"
-                  >
+                <div style={{ display: "flex", gap: "4px" }}>
+                  <Button size="s" mode="bezeled" onClick={() => openEdit(server)}>
                     Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(server)}
-                    className="rounded px-2 py-1 text-xs text-tg-destructive"
-                  >
+                  </Button>
+                  <Button size="s" mode="bezeled" onClick={() => handleDelete(server)}>
                     Delete
-                  </button>
+                  </Button>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+            </Cell>
+          ))
+        )}
+      </Section>
+
+      <Section>
+        <Button size="l" stretched mode="filled" onClick={openAdd}>
+          + Add Server
+        </Button>
+      </Section>
+    </List>
   );
 }

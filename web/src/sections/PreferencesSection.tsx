@@ -128,6 +128,7 @@ export function PreferencesSection() {
             placeholder="e.g. Always respond in Spanish. Be more formal."
             rows={5}
             rounded="lg"
+            bg="bg.subtle"
           />
           <Field.HelperText>
             Append to the default system prompt

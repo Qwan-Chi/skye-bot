@@ -174,6 +174,7 @@ export function McpSection() {
                 }
                 placeholder="my-server"
                 rounded="lg"
+                bg="bg.subtle"
               />
             </Field.Root>
 
@@ -214,6 +215,7 @@ export function McpSection() {
                     }
                     placeholder="https://example.com/mcp"
                     rounded="lg"
+                    bg="bg.subtle"
                   />
                 </Field.Root>
                 <Field.Root>
@@ -226,6 +228,7 @@ export function McpSection() {
                     placeholder='{"Authorization": "Bearer token"}'
                     rows={3}
                     rounded="lg"
+                    bg="bg.subtle"
                   />
                   <Field.HelperText>
                     e.g. {"{"}"Authorization": "Bearer ..."{"}"}
@@ -243,6 +246,7 @@ export function McpSection() {
                     }
                     placeholder="npx"
                     rounded="lg"
+                    bg="bg.subtle"
                   />
                 </Field.Root>
                 <Field.Root>
@@ -254,6 +258,7 @@ export function McpSection() {
                     }
                     placeholder='["-y", "my-mcp-server"]'
                     rounded="lg"
+                    bg="bg.subtle"
                   />
                 </Field.Root>
                 <Field.Root>
@@ -266,6 +271,7 @@ export function McpSection() {
                     placeholder='{"API_KEY": "..."}'
                     rows={3}
                     rounded="lg"
+                    bg="bg.subtle"
                   />
                   <Field.HelperText>Additional env vars</Field.HelperText>
                 </Field.Root>

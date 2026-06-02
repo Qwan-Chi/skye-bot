@@ -63,6 +63,7 @@ export function ConfigSection() {
               }
               placeholder="sk-..."
               rounded="lg"
+              bg="bg.subtle"
             />
             <Field.HelperText>
               Your OpenAI-compatible API key
@@ -79,6 +80,7 @@ export function ConfigSection() {
               }
               placeholder="https://openrouter.ai/api/v1"
               rounded="lg"
+              bg="bg.subtle"
             />
             <Field.HelperText>API endpoint (default: OpenRouter)</Field.HelperText>
           </Field.Root>
@@ -92,6 +94,7 @@ export function ConfigSection() {
               }
               placeholder="openai/gpt-oss-120b"
               rounded="lg"
+              bg="bg.subtle"
             />
             <Field.HelperText>Model ID (e.g. openai/gpt-oss-120b)</Field.HelperText>
           </Field.Root>

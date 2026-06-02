@@ -30,14 +30,7 @@
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.54.0",
-    "vitest": "^3.0.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3",
-      "esbuild",
-      "sharp"
-    ]
+    "vitest": "^3.2.6"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

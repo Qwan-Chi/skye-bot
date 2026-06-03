@@ -1,5 +1,4 @@
 import { createHmac } from "crypto";
-import { BOT_TOKEN } from "../config.js";
 
 export interface TelegramUser {
   id: number;
@@ -15,7 +14,11 @@ export interface ValidatedInitData {
   authDate: number;
 }
 
-export function validateInitData(initData: string): ValidatedInitData | null {
+/**
+ * Validate Telegram WebApp initData against the bot token using the documented
+ * HMAC scheme. Returns the parsed user payload, or null if invalid/expired.
+ */
+export function validateInitData(initData: string, botToken: string): ValidatedInitData | null {
   if (!initData) return null;
 
   const params = new URLSearchParams(initData);
@@ -28,7 +31,7 @@ export function validateInitData(initData: string): ValidatedInitData | null {
     .map(([k, v]) => `${k}=${v}`)
     .join("\n");
 
-  const secretKey = createHmac("sha256", "WebAppData").update(BOT_TOKEN).digest();
+  const secretKey = createHmac("sha256", "WebAppData").update(botToken).digest();
   const computedHash = createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
 
   if (computedHash !== hash) return null;

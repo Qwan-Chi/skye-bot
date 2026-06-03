@@ -1,9 +1,11 @@
-// Must be set before any module that calls getDb() is executed
-process.env.DB_PATH = ":memory:";
-
 import { test, expect, describe } from "vitest";
-import { formatLogEntry, logMessage, getOlderEntries, getChatContext } from "../chatLog.js";
-import type { LogEntry } from "../chatLog.js";
+import {
+  formatLogEntry,
+  logMessage,
+  getOlderEntries,
+  getChatContext,
+} from "../modules/chatLog/service.js";
+import type { LogEntry } from "../modules/chatLog/service.js";
 
 const entry = (content: string, sender = "Alice", type = "text"): LogEntry => ({
   sender,

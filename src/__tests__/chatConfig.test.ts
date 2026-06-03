@@ -1,6 +1,3 @@
-// Must be set before any module that calls getDb() is executed
-process.env.DB_PATH = ":memory:";
-
 import { test, expect, describe, beforeEach } from "vitest";
 import {
   getChatConfig,
@@ -8,7 +5,7 @@ import {
   setChatBaseUrl,
   resetChatApiKey,
   resetChatBaseUrl,
-} from "../chatConfig.js";
+} from "../modules/chatConfig/service.js";
 
 const CHAT = 77;
 
@@ -19,7 +16,7 @@ beforeEach(async () => {
 
 describe("getChatConfig", () => {
   test("returns defaults for unknown chatId", () => {
-    expect(getChatConfig(9999)).toEqual({ fastMode: false, voiceMode: false });
+    expect(getChatConfig(9999)).toEqual({ voiceMode: false });
   });
 });
 
@@ -53,7 +50,7 @@ describe("resetChatApiKey", () => {
   test("cleans up the row when both fields are null", async () => {
     await setChatApiKey(CHAT, "sk-only");
     await resetChatApiKey(CHAT);
-    expect(getChatConfig(CHAT)).toEqual({ fastMode: false, voiceMode: false });
+    expect(getChatConfig(CHAT)).toEqual({ voiceMode: false });
   });
 
   test("preserves baseUrl when only apiKey is reset", async () => {

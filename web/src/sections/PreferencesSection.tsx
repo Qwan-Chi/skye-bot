@@ -6,7 +6,6 @@ import { api, type UserConfig, type ChatConfig } from "../api";
 export function PreferencesSection() {
   const [config, setConfig] = useState<UserConfig>({});
   const [chatConfig, setChatConfig] = useState<ChatConfig>({
-    fastMode: false,
     voiceMode: false,
   });
   const [loading, setLoading] = useState(true);
@@ -27,7 +26,7 @@ export function PreferencesSection() {
     setDirty(true);
   };
 
-  const toggleChat = async (key: "fastMode" | "voiceMode") => {
+  const toggleChat = async (key: "voiceMode") => {
     const next = { [key]: !chatConfig[key] };
     setChatConfig((c) => ({ ...c, ...next }));
     try {
@@ -74,27 +73,9 @@ export function PreferencesSection() {
         <Stack gap={4}>
           <HStack justify="space-between" align="start">
             <Stack gap={0.5} flex={1}>
-              <Text fontWeight="medium">Fast Mode</Text>
-              <Text fontSize="sm" color="fg.muted">
-                Use local Ollama for ultra-low latency responses
-              </Text>
-            </Stack>
-            <Switch.Root
-              checked={chatConfig.fastMode}
-              onCheckedChange={() => toggleChat("fastMode")}
-            >
-              <Switch.HiddenInput />
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
-            </Switch.Root>
-          </HStack>
-
-          <HStack justify="space-between" align="start">
-            <Stack gap={0.5} flex={1}>
               <Text fontWeight="medium">Voice Mode</Text>
               <Text fontSize="sm" color="fg.muted">
-                Send responses as voice notes via ElevenLabs TTS
+                Send responses as voice notes via Yandex SpeechKit TTS
               </Text>
             </Stack>
             <Switch.Root

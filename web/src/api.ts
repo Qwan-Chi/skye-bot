@@ -56,7 +56,6 @@ export interface UsageStats {
 }
 
 export interface ChatConfig {
-  fastMode: boolean;
   voiceMode: boolean;
 }
 

@@ -1,6 +1,6 @@
 import { test, expect, describe } from "vitest";
-import { buildSystemPrompt, SYSTEM_PROMPT } from "../prompt.js";
-import type { MemoryEntry } from "../memory.js";
+import { buildSystemPrompt, SYSTEM_PROMPT } from "../modules/llm/prompt.js";
+import type { MemoryEntry } from "../modules/memory/service.js";
 
 const makeMemory = (id: string, content: string): MemoryEntry => ({
   id,

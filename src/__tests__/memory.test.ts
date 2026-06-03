@@ -1,6 +1,3 @@
-// Must be set before any module that calls getDb() is executed
-process.env.DB_PATH = ":memory:";
-
 import { test, expect, describe, beforeEach } from "vitest";
 import {
   addMemory,
@@ -8,7 +5,7 @@ import {
   deleteMemory,
   clearMemories,
   executeMemoryTool,
-} from "../memory.js";
+} from "../modules/memory/service.js";
 
 const CHAT = 42;
 

@@ -1,4 +1,4 @@
-import type { MemoryEntry } from "./memory.js";
+import type { MemoryEntry } from "../memory/service.js";
 
 export const SYSTEM_PROMPT = `
     You are **Skye**, a calm, minimal, and grounded AI assistant.

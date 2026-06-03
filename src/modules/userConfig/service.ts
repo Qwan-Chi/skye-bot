@@ -1,4 +1,4 @@
-import { getDb } from "./db.js";
+import { getDb } from "../../core/db.js";
 
 export interface UserConfig {
   apiKey?: string;
@@ -161,3 +161,34 @@ export function getAllUserMcpServers(): UserMcpServer[] {
       config: JSON.parse(row.config),
     }));
 }
+
+export interface UserConfigService {
+  get(userId: number): UserConfig;
+  set(userId: number, config: UserConfig): void;
+  listMcpServers(userId: number): UserMcpServer[];
+  getMcpServer(id: number, userId: number): UserMcpServer | null;
+  addMcpServer(userId: number, name: string, config: Record<string, unknown>): number;
+  updateMcpServer(
+    id: number,
+    userId: number,
+    name: string,
+    config: Record<string, unknown>
+  ): boolean;
+  deleteMcpServer(id: number, userId: number): boolean;
+  setMcpInput(serverId: number, inputId: string, value: string): void;
+  getMcpInputs(serverId: number): Record<string, string>;
+  listAllMcpServers(): UserMcpServer[];
+}
+
+export const userConfigService: UserConfigService = {
+  get: getUserConfig,
+  set: setUserConfig,
+  listMcpServers: getUserMcpServers,
+  getMcpServer: getUserMcpServer,
+  addMcpServer: addUserMcpServer,
+  updateMcpServer: updateUserMcpServer,
+  deleteMcpServer: deleteUserMcpServer,
+  setMcpInput: setUserMcpInput,
+  getMcpInputs: getUserMcpInputs,
+  listAllMcpServers: getAllUserMcpServers,
+};

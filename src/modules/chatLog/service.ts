@@ -1,6 +1,6 @@
-import { getDb } from "./db.js";
-import { askSkye, type ApiCredentials } from "./openai.js";
-import { log } from "./utils/log.js";
+import { getDb } from "../../core/db.js";
+import type { ApiCredentials, LlmClient } from "../llm/client.js";
+import { log } from "../../utils/log.js";
 
 const MAX_BUFFER = 50;
 const RECENT_COUNT = 20;
@@ -19,6 +19,13 @@ const logs = new Map<number, LogEntry[]>();
 const counters = new Map<number, number>();
 const chatTitles = new Map<number, string>();
 
+let llmRef: LlmClient | null = null;
+
+/** Wired by the chatLog module's init() so summarizeChat can hit the LLM. */
+export function setLlmClient(client: LlmClient): void {
+  llmRef = client;
+}
+
 function getSummary(chatId: number): string {
   const row = getDb()
     .prepare<[number], { summary: string }>("SELECT summary FROM chat_summaries WHERE chat_id = ?")
@@ -33,27 +40,18 @@ export function formatLogEntry(entry: LogEntry): string {
   return `[${time}] ${entry.sender}${reply}: ${typeTag}${entry.content}`;
 }
 
-/**
- * Push a message to the buffer. Returns true if summarization is due.
- */
+/** Push a message to the buffer. Returns true if summarization is due. */
 export function logMessage(chatId: number, entry: LogEntry, chatTitle?: string): boolean {
   if (chatTitle) chatTitles.set(chatId, chatTitle);
-
   if (!logs.has(chatId)) logs.set(chatId, []);
   const buf = logs.get(chatId)!;
   buf.push(entry);
   if (buf.length > MAX_BUFFER) buf.shift();
-
   const count = (counters.get(chatId) ?? 0) + 1;
   counters.set(chatId, count);
-
   return count >= SUMMARIZE_INTERVAL;
 }
 
-/**
- * Returns the older portion of the buffer (everything before the last 20)
- * for feeding into the summarizer.
- */
 export function getOlderEntries(chatId: number): LogEntry[] {
   const buf = logs.get(chatId);
   if (!buf) return [];
@@ -61,27 +59,18 @@ export function getOlderEntries(chatId: number): LogEntry[] {
   return buf.slice(0, cutoff);
 }
 
-/**
- * Returns chat context for the system prompt, or undefined if no log exists.
- */
 export function getChatContext(
   chatId: number
 ): { chatTitle: string; summary: string; recentLog: string } | undefined {
   const buf = logs.get(chatId);
   if (!buf || buf.length === 0) return undefined;
-
   const title = chatTitles.get(chatId) ?? "Unknown Chat";
   const summary = getSummary(chatId);
-
   const recent = buf.slice(-RECENT_COUNT);
   const recentLog = recent.map(formatLogEntry).join("\n");
-
   return { chatTitle: title, summary, recentLog };
 }
 
-/**
- * Store a summary and reset the counter. Persists to SQLite.
- */
 export async function setSummary(chatId: number, summary: string): Promise<void> {
   getDb()
     .prepare(
@@ -92,13 +81,14 @@ export async function setSummary(chatId: number, summary: string): Promise<void>
   counters.set(chatId, 0);
 }
 
-/**
- * Summarize older entries via askSkye and store the result.
- */
 export async function summarizeChat(chatId: number, creds?: ApiCredentials): Promise<void> {
   const older = getOlderEntries(chatId);
   if (older.length === 0) {
-    // Nothing to summarize, just reset counter
+    counters.set(chatId, 0);
+    return;
+  }
+  if (!llmRef) {
+    log.warn(`Chat ${chatId}: summarization skipped — LLM client not wired`);
     counters.set(chatId, 0);
     return;
   }
@@ -108,15 +98,27 @@ export async function summarizeChat(chatId: number, creds?: ApiCredentials): Pro
     "You are a concise summarizer. Given a log of group chat messages, produce a brief summary noting: key participants, topics discussed, any media or files exchanged, and approximate timeline. Keep it under 200 words. Output only the summary, no preamble.";
 
   try {
-    const res = await askSkye(instructions, formatted, creds);
+    const res = await llmRef.ask(instructions, formatted, creds);
     const text = res.output_text;
     if (text) {
       await setSummary(chatId, text);
       log.info(`Chat ${chatId}: summarized ${older.length} older messages`);
     }
-  } catch (e: any) {
-    log.warn(`Chat ${chatId}: summarization failed: ${e?.message || e}`);
-    // Reset counter so we retry next interval
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.warn(`Chat ${chatId}: summarization failed: ${msg}`);
     counters.set(chatId, 0);
   }
 }
+
+export interface ChatLogService {
+  log(chatId: number, entry: LogEntry, chatTitle?: string): boolean;
+  context(chatId: number): { chatTitle: string; summary: string; recentLog: string } | undefined;
+  summarize(chatId: number, creds?: ApiCredentials): Promise<void>;
+}
+
+export const chatLogService: ChatLogService = {
+  log: logMessage,
+  context: getChatContext,
+  summarize: summarizeChat,
+};

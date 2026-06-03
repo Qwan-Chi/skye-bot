@@ -1,4 +1,4 @@
-import { getDb } from "./db.js";
+import { getDb } from "../../core/db.js";
 
 export interface MemoryEntry {
   id: string;
@@ -12,7 +12,9 @@ function generateId(): string {
 
 export function getMemories(chatId: number): MemoryEntry[] {
   return getDb()
-    .prepare<[number], MemoryEntry>("SELECT id, content, created_at AS createdAt FROM memories WHERE chat_id = ? ORDER BY created_at")
+    .prepare<[number], MemoryEntry>(
+      "SELECT id, content, created_at AS createdAt FROM memories WHERE chat_id = ? ORDER BY created_at"
+    )
     .all(chatId);
 }
 
@@ -29,7 +31,9 @@ export async function addMemory(chatId: number, content: string): Promise<Memory
 }
 
 export async function deleteMemory(chatId: number, id: string): Promise<boolean> {
-  const result = getDb().prepare("DELETE FROM memories WHERE chat_id = ? AND id = ?").run(chatId, id);
+  const result = getDb()
+    .prepare("DELETE FROM memories WHERE chat_id = ? AND id = ?")
+    .run(chatId, id);
   return result.changes > 0;
 }
 
@@ -37,44 +41,6 @@ export async function clearMemories(chatId: number): Promise<void> {
   getDb().prepare("DELETE FROM memories WHERE chat_id = ?").run(chatId);
 }
 
-// Responses API tool definitions (flat format: { type, name, description, parameters })
-export const memoryTools = [
-  {
-    type: "function" as const,
-    name: "save_memory",
-    description:
-      "Save a piece of information to long-term memory for this chat. Use this when the user asks you to remember something, or when you encounter important facts worth preserving (names, preferences, project details, etc.).",
-    parameters: {
-      type: "object",
-      properties: {
-        content: {
-          type: "string",
-          description: "The information to remember, written as a clear factual statement.",
-        },
-      },
-      required: ["content"],
-    },
-  },
-  {
-    type: "function" as const,
-    name: "delete_memory",
-    description:
-      "Delete a specific memory by its ID. Use this when the user asks you to forget something.",
-    parameters: {
-      type: "object",
-      properties: {
-        memory_id: {
-          type: "string",
-          description: "The ID of the memory to delete (e.g. mem_abc123).",
-        },
-      },
-      required: ["memory_id"],
-    },
-  },
-];
-
-// Execute a memory tool call and return the result string.
-// toolCall is a ResponseFunctionToolCall from the Responses API.
 export async function executeMemoryTool(
   chatId: number,
   toolCall: { name: string; arguments: string }
@@ -94,3 +60,17 @@ export async function executeMemoryTool(
       return `Unknown tool: ${toolCall.name}`;
   }
 }
+
+export interface MemoryService {
+  list(chatId: number): MemoryEntry[];
+  add(chatId: number, content: string): Promise<MemoryEntry>;
+  delete(chatId: number, id: string): Promise<boolean>;
+  clear(chatId: number): Promise<void>;
+}
+
+export const memoryService: MemoryService = {
+  list: getMemories,
+  add: addMemory,
+  delete: deleteMemory,
+  clear: clearMemories,
+};

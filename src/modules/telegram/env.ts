@@ -1,0 +1,19 @@
+import { z } from "zod";
+
+export const telegramEnvSchema = z.object({
+  BOT_TOKEN: z.string().min(1, "BOT_TOKEN is required"),
+  ALLOWED_IDS: z.string().default(""),
+});
+
+export type TelegramEnv = z.infer<typeof telegramEnvSchema>;
+
+export function parseAllowedIds(raw: string): Set<number> {
+  return new Set(
+    raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map(Number)
+      .filter((n) => !isNaN(n))
+  );
+}

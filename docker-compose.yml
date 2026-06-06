@@ -1,0 +1,11 @@
+services:
+  skye-bot:
+    build: .
+    container_name: skye-bot
+    restart: unless-stopped
+    # Secrets live in .env (gitignored), injected at runtime — not baked into the image.
+    env_file:
+      - .env
+    volumes:
+      # Persist the SQLite DB (src/core/db.ts defaults to /app/data/skye.db) across rebuilds.
+      - ./data:/app/data

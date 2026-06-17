@@ -102,9 +102,13 @@ export async function runChatLoop(
 
     const response = await stream.finalResponse();
 
-    const fnCalls = response.output.filter(
-      (item): item is Extract<typeof item, { type: "function_call" }> =>
-        item.type === "function_call"
+    const fnCalls = (
+      response.output.filter((item) => item.type === "function_call") as Array<{
+        type: "function_call";
+        call_id: string;
+        name: string;
+        arguments: string;
+      }>
     );
 
     if (fnCalls.length === 0) {

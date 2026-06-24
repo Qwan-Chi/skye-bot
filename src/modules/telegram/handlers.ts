@@ -431,7 +431,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
       handler: async (ctx, tenant) => {
         const tk = threadKey(tenant);
         deps.chatLog.clearConversation(tenant.chatId, tk);
-        await ctx.reply("Context reset. Memories are still saved — use /forget to clear them.");
+        await sendRichReply(ctx, "🧹 **Context reset.**\n\n_Memories are still saved — use /forget to clear them._");
       },
     },
     {
@@ -539,40 +539,64 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
         const userCfg = tenant.userId ? deps.userConfig.get(tenant.userId) : undefined;
         const mcpTools = tenant.userId ? deps.mcp.toolsFor(tenant.userId) : [];
         const vision = deps.llm.supportsImages();
-        const lines = [
-          "**Skye status**",
+        const memoryCount = deps.memory.list(tenant.chatId).length;
+        const ctxCount = deps.chatLog.countConversation(tenant.chatId, threadKey(tenant));
+        const proactiveOn = deps.proactive?.isEnabled() ?? false;
+
+        const yes = "✅";
+        const no = "❌";
+        const warn = "⚠️";
+
+        const md = [
+          "## Skye status",
           "",
-          `Chat: \`${tenant.chatType}\`${tenant.threadId ? ` / topic ${tenant.threadId}` : ""}`,
-          `Model: \`${userCfg?.model ?? deps.defaultModel}\``,
-          `Vision: ${vision === false ? "off" : vision === true ? "on" : "unknown"}`,
-          `Voice input: ${deps.speech.isSttAvailable() ? "on" : "off"}`,
-          `Voice replies: ${chatCfg.voiceMode ? "on" : "off"}`,
-          `TTS: ${deps.speech.isTtsAvailable() ? "on" : "off"}`,
-          `Memories: ${deps.memory.list(tenant.chatId).length}`,
-          `Context items: ${deps.chatLog.countConversation(tenant.chatId, threadKey(tenant))}`,
-          `MCP tools: ${mcpTools.length}`,
-          `Sandbox: ${deps.sandbox?.isEnabled() ? "on" : "off"}`,
-        ];
-        await sendRichReply(ctx, lines.join("\n"));
+          "| | |",
+          "|---|---|",
+          `| **Chat** | ${tenant.chatType}${tenant.threadId ? ` · topic ${tenant.threadId}` : ""} |`,
+          `| **Model** | \`${userCfg?.model ?? deps.defaultModel}\` |`,
+          `| **Vision** | ${vision === true ? yes : vision === false ? no : warn + " unknown"} |`,
+          `| **Voice input** | ${deps.speech.isSttAvailable() ? yes : no} |`,
+          `| **Voice replies** | ${chatCfg.voiceMode ? yes : no} |`,
+          `| **TTS** | ${deps.speech.isTtsAvailable() ? yes : no} |`,
+          `| **Memories** | ${memoryCount} |`,
+          `| **Context items** | ${ctxCount} |`,
+          `| **MCP tools** | ${mcpTools.length} |`,
+          `| **Sandbox** | ${deps.sandbox?.isEnabled() ? yes : no} |`,
+          `| **Proactive** | ${proactiveOn ? yes : no} |`,
+        ].join("\n");
+        await sendRichReply(ctx, md);
       },
     },
     {
       name: "catchup",
-      description: "Summarize recent group context",
+      description: "Show recent group context",
       public: true,
       handler: async (ctx, tenant) => {
         const context = deps.chatLog.context(tenant.chatId);
         if (!context) {
-          await ctx.reply("No group context yet.", {
-            reply_to_message_id: ctx.message?.message_id,
-          });
+          await sendRichReply(ctx, "_No group context yet._");
           return;
         }
-        const parts = [
-          `**${context.chatTitle} catch-up**`,
-          context.recentLog ? `\n**Recent messages**\n${context.recentLog}` : "",
-        ];
-        await sendRichReply(ctx, parts.filter(Boolean).join("\n"));
+        const lines = context.recentLog.split("\n").filter(Boolean);
+        const rows = lines.map((line) => {
+          // [HH:MM] Sender (replying to X): [type] content
+          const m = line.match(/^\[(.+?)\] (.+?)(?: \(replying to (.+?)\))?: (.+)$/);
+          if (!m) return `| ${line.replace(/\|/g, "\\|")} |`;
+          const [, time, sender, replyTo, rest] = m;
+          const typeMatch = rest.match(/^\[(.+?)\]\s*(.*)$/);
+          const typeTag = typeMatch ? typeMatch[1] : "";
+          const content = (typeMatch ? typeMatch[2] : rest).replace(/\|/g, "\\|").slice(0, 80);
+          const senderCol = replyTo ? `${sender} ↩ ${replyTo}` : sender;
+          return `| ${time} | ${senderCol} | ${typeTag || "text"} | ${content} |`;
+        });
+        const md = [
+          `## ${context.chatTitle} — catch-up`,
+          "",
+          "| Time | Sender | Type | Content |",
+          "|---|---|---|---|",
+          ...rows,
+        ].join("\n");
+        await sendRichReply(ctx, md);
       },
     },
   ];

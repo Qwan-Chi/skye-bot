@@ -1,6 +1,7 @@
 import type { SkyeModule, ToolDefinition } from "../../core/module.js";
 import { migrations } from "./migrations.js";
 import { buildRoutes } from "./routes.js";
+import { sendRichReply } from "../telegram/helpers.js";
 import {
   addMemory,
   clearMemories,
@@ -73,7 +74,7 @@ export const memoryModule: SkyeModule = {
           description: "Clear all saved memories for this chat",
           handler: async (ctx, tenant) => {
             await clearMemories(tenant.chatId);
-            await ctx.reply("All memories cleared.");
+            await sendRichReply(ctx, "🧹 **All memories cleared.**");
           },
         },
       ],

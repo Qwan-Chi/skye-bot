@@ -1,6 +1,7 @@
 import type { SkyeModule } from "../../core/module.js";
 import { migrations } from "./migrations.js";
 import { buildRoutes } from "./routes.js";
+import { sendRichReply } from "../telegram/helpers.js";
 import {
   chatConfigService,
   getChatConfig,
@@ -31,11 +32,11 @@ export const chatConfigModule: SkyeModule = {
             const cfg = getChatConfig(tenant.chatId);
             const newState = !cfg.voiceMode;
             setChatVoiceMode(tenant.chatId, newState);
-            await ctx.reply(
+            await sendRichReply(
+              ctx,
               newState
-                ? "Voice mode ON — text responses will be sent as voice notes."
-                : "Voice mode OFF — responses will be sent as text.",
-              { reply_to_message_id: ctx.message!.message_id }
+                ? "🎙 **Voice mode ON**\n\n_Text responses will be sent as voice notes._"
+                : "📝 **Voice mode OFF**\n\n_Responses will be sent as text._"
             );
           },
         },

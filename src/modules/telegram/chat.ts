@@ -17,8 +17,10 @@ export interface ChatLoopDeps {
   chatLog: ChatLogService;
   userConfig: UserConfigService;
   sandbox?: SandboxService;
-  /** Built-in (non-MCP) tools — currently just memory tools. */
+  /** Built-in (non-MCP) tools — currently just memory + image generation. */
   builtinTools: ToolDefinition[];
+  /** Whether reference images are available for the generate_image tool this turn. */
+  hasReferenceImages?: boolean;
 }
 
 /**
@@ -59,7 +61,8 @@ export async function runChatLoop(
     chatContext,
     mcpToolNames,
     userCfg?.systemPrompt,
-    deps.sandbox?.isEnabled()
+    deps.sandbox?.isEnabled(),
+    deps.hasReferenceImages
   );
 
   // Log the request summary (last user item text + attachments).

@@ -33,6 +33,6 @@ Skye is a calm, minimal AI assistant for Telegram. It answers questions, remembe
 ## Getting started
 
 1. Create a Telegram bot with [@BotFather](https://t.me/botfather).
-2. Copy `env.example` to `.env` and fill in your `BOT_TOKEN` and `OPENAI_KEY`.
+2. Copy `config.example.yaml` to `config.yaml` and fill in your `bot_token` and `openai_key`.
 3. Run `pnpm install && pnpm run dev`.
 4. Open Telegram, find your bot, and say hello.

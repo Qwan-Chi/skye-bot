@@ -1,82 +1,96 @@
 # Configuration
 
-Skye is configured through environment variables and per-user settings. This page covers both.
+Skye is configured through a `config.yaml` file and per-user settings. This page covers both.
 
-## Environment variables
+## Configuration file
 
-Create a `.env` file from `env.example`. All variables are required unless marked optional.
+Create a `config.yaml` from `config.example.yaml`. All keys are required unless marked optional.
+
+Real environment variables override YAML values — useful for platform-injected secrets (e.g. `VERCEL_OIDC_TOKEN` on Vercel hosting) or PaaS dashboards that don't allow mounting config files. For local dev and VPS, put everything in `config.yaml`.
 
 ### Core
 
-| Variable                | Purpose                                                                           |
-| ----------------------- | --------------------------------------------------------------------------------- |
-| `BOT_TOKEN`             | Your Telegram bot token from [@BotFather](https://t.me/botfather).                |
-| `OPENAI_KEY`            | API key for the LLM. Works with OpenRouter, OpenAI, or any compatible API.        |
-| `MODEL`                 | LLM model ID. Default: `openai/gpt-oss-120b`.                                     |
-| `BASE_URL`              | API base URL. Default: `https://openrouter.ai/api/v1`.                            |
-| `MAX_COMPLETION_TOKENS` | Maximum tokens per response. Default: `500`.                                      |
-| `ALLOWED_IDS`           | Comma-separated Telegram chat IDs that can use the bot without their own API key. |
+| Key                | Purpose                                                                           |
+| ------------------ | --------------------------------------------------------------------------------- |
+| `bot_token`        | Your Telegram bot token from [@BotFather](https://t.me/botfather).                |
+| `openai_key`       | API key for the LLM. Works with OpenRouter, OpenAI, or any compatible API.        |
+| `model`            | LLM model ID. Default: `openai/gpt-oss-120b`.                                     |
+| `base_url`         | API base URL. Default: `https://openrouter.ai/api/v1`.                            |
+| `max_completion_tokens` | Maximum tokens per response. Default: `500`.                                      |
+| `allowed_ids`      | Comma-separated Telegram chat IDs that can use the bot without their own API key. |
+| `telegram_polling_lock` | Set to `"0"` to disable the single-instance polling lock. Default: `"1"`.       |
+| `use_chat_completions` | Set to `true` if your provider doesn't support the Responses API. Default: `false`. |
+| `log_level`        | Pino log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal`. Default: `info`. |
+| `db_path`          | SQLite database path. Default: `data/skye.db`. Supports `:memory:` for ephemeral storage. |
 
 ### Image generation
 
-| Variable         | Purpose                                                                               |
-| ---------------- | ------------------------------------------------------------------------------------- |
-| `IMAGE_BASE_URL` | Separate API base URL for image generation. Falls back to `BASE_URL` if empty.        |
-| `IMAGE_API_KEY`  | Separate API key for image generation. Falls back to `OPENAI_KEY` if empty.           |
-| `IMAGE_MODEL`    | Model for image generation/editing. Default: `google/gemini-3.1-flash-image-preview`. |
+| Key                | Purpose                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| `image.base_url`   | Separate API base URL for image generation. Falls back to `base_url` if empty.        |
+| `image.api_key`    | Separate API key for image generation. Falls back to `openai_key` if empty.          |
+| `image.model`      | Model for image generation/editing. Default: `google/gemini-3.1-flash-image-preview`. |
 
 These are useful if your chat provider doesn't support image generation (e.g., a local Ollama instance) and you want to use OpenRouter or another service just for images.
 
 ### Voice (SpeechKit — optional)
 
-| Variable         | Purpose                                                          |
-| ---------------- | ---------------------------------------------------------------- |
-| `YC_API_KEY`     | Yandex Cloud API key for speech recognition and synthesis.       |
-| `YC_FOLDER_ID`   | Yandex Cloud folder ID.                                          |
-| `YC_TTS_VOICE`   | TTS voice name. Default: `jane`.                                 |
-| `YC_TTS_EMOTION` | TTS emotion: `neutral`, `good`, `evil`, `strict`, or `friendly`. |
-| `YC_TTS_LANG`    | BCP-47 language tag. Default: `ru-RU`.                           |
-| `YC_TTS_SPEED`   | Playback speed (0.1 – 3.0). Default: `1.0`.                      |
+| Key                | Purpose                                                          |
+| ------------------ | ---------------------------------------------------------------- |
+| `voice.yc_api_key`     | Yandex Cloud API key for speech recognition and synthesis.       |
+| `voice.yc_folder_id`   | Yandex Cloud folder ID.                                          |
+| `voice.tts_voice`     | TTS voice name. Default: `jane`.                                 |
+| `voice.tts_emotion`   | TTS emotion: `neutral`, `good`, `evil`, `strict`, or `friendly`. |
+| `voice.tts_lang`      | BCP-47 language tag. Default: `ru-RU`.                           |
+| `voice.tts_speed`     | Playback speed (0.1 – 3.0). Default: `1.0`.                      |
 
 Voice features are **optional**. If you don't need speech input/output, leave YC variables empty.
 
 ### Logging & audit
 
-| Variable               | Purpose                                                                              |
-| ---------------------- | ------------------------------------------------------------------------------------ |
-| `LOG_LEVEL`            | Pino log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal`. Default: `info`. |
-| `AUDIT_RETENTION_DAYS` | Auto-delete audit logs older than N days. Default: `90`.                             |
-| `AUDIT_MAX_ROWS`       | Maximum audit log rows to keep. Default: `100000`.                                   |
+| Key                | Purpose                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `log_level`            | Pino log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal`. Default: `info`. |
+| `audit.retention_days` | Auto-delete audit logs older than N days. Default: `90`.                             |
+| `audit.max_rows`       | Maximum audit log rows to keep. Default: `100000`.                                   |
 
 ### MCP
 
-| Variable          | Purpose                                             |
-| ----------------- | --------------------------------------------------- |
-| `MCP_CONFIG_PATH` | Path to the MCP config file. Default: `./mcp.json`. |
+| Key                | Purpose                                             |
+| ------------------ | --------------------------------------------------- |
+| `mcp.config_path`  | Path to the MCP config file. Default: `./mcp.json`. |
 
 See [MCP Tools](mcp-tools.md) for configuration details.
 
 ### Settings panel
 
-| Variable      | Purpose                                                                          |
-| ------------- | -------------------------------------------------------------------------------- |
-| `WEBAPP_URL`  | Public URL where the Telegram Mini App is accessible. Set this in BotFather too. |
-| `WEBAPP_PORT` | Port for the panel web server. Default: `3001`.                                  |
+| Key                | Purpose                                                                          |
+| ------------------ | -------------------------------------------------------------------------------- |
+| `panel.webapp_url`  | Public URL where the Telegram Mini App is accessible. Set this in BotFather too. |
+| `panel.webapp_port` | Port for the panel web server. Default: `3001`.                                  |
 
-### Database
+### Vercel Sandbox
 
-| Variable  | Purpose                                                                                   |
-| --------- | ----------------------------------------------------------------------------------------- |
-| `DB_PATH` | SQLite database path. Default: `data/skye.db`. Supports `:memory:` for ephemeral storage. |
+| Key                | Purpose                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| `sandbox.enabled`  | Enable the Vercel Sandbox feature. Default: `true`.                                       |
+| `sandbox.runtime`  | Sandbox runtime. Default: `node24`.                                                       |
+| `sandbox.timeout_ms` | Sandbox VM timeout. Default: `300000`.                                                   |
+| `sandbox.vcpus`    | Sandbox vCPUs. Default: `2`.                                                              |
+| `sandbox.persistent` | Keep sandbox filesystem between sessions. Default: `false`.                              |
+| `sandbox.command_timeout_ms` | Per-command timeout. Default: `60000`.                                           |
+| `sandbox.vercel_access_token` | Vercel API token. Can be overridden by `VERCEL_OIDC_TOKEN` env var on Vercel.     |
+| `sandbox.vercel_project_id`   | Vercel project ID.                                                                |
+| `sandbox.vercel_team_id`      | Vercel team ID.                                                                   |
 
 ## Access control
 
 Skye uses a layered access system:
 
-1. **Allowlist**: Chat IDs in `ALLOWED_IDS` have unrestricted access.
+1. **Allowlist**: Chat IDs in `allowed_ids` have unrestricted access.
 2. **Per-chat key**: Chats can have their own API key set via the Settings panel.
 3. **Per-user key**: Users can set their own API key, model, and prompt via the Settings panel.
-4. **Global key**: The `OPENAI_KEY` from `.env` is used as a fallback.
+4. **Global key**: The `openai_key` from `config.yaml` is used as a fallback.
 
 If none of these are configured for a user or chat, Skye asks them to set up an API key via `/config`.
 
@@ -105,6 +119,6 @@ When resolving which credentials to use, Skye checks in this order:
 
 1. User's own API key (from Settings panel)
 2. Chat's own API key
-3. Global `OPENAI_KEY` (from `.env`)
+3. Global `openai_key` (from `config.yaml`)
 
 The first configured key wins. This means a user can override both the chat and global keys with their personal configuration.

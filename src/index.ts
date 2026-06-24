@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./core/config.js";
 import {
   composeAndParseEnv,
   initModules,

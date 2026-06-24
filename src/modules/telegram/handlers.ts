@@ -87,6 +87,99 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
   const queues = new Map<string, Promise<void>>();
   const textBursts = new Map<string, { timer: NodeJS.Timeout; items: QueuedTextMessage[] }>();
   const imageControls = new Map<string, ImageControl>();
+  // Reference images collected per-thread, consumed by the generate_image tool.
+  const threadReferenceImages = new Map<string, string[]>();
+
+  const MENTION_RE = /\b(skye|скай)\b/i;
+  const botUserId = () => bot.botInfo.id;
+  const botUsername = () => bot.botInfo.username?.toLowerCase() ?? "";
+
+  function isMentioned(ctx: GrammyContext): boolean {
+    const text = ctx.message?.text ?? ctx.message?.caption ?? "";
+    if (!text) return false;
+    if (MENTION_RE.test(text)) return true;
+    const uname = botUsername();
+    if (uname && text.toLowerCase().includes(`@${uname}`)) return true;
+    return false;
+  }
+
+  function isReplyToBot(ctx: GrammyContext): boolean {
+    const reply = ctx.message && "reply_to_message" in ctx.message
+      ? ctx.message.reply_to_message
+      : undefined;
+    return reply?.from?.id === botUserId();
+  }
+
+  function isDirectedAtBot(ctx: GrammyContext): boolean {
+    const isPM = ctx.chat?.type === "private";
+    if (isPM) return true;
+    return isMentioned(ctx) || isReplyToBot(ctx);
+  }
+
+  async function collectReferenceImages(ctx: GrammyContext): Promise<string[]> {
+    const reply = ctx.message && "reply_to_message" in ctx.message
+      ? ctx.message.reply_to_message
+      : undefined;
+    if (!reply) return [];
+    const images: string[] = [];
+    if (reply.photo?.length) {
+      try {
+        const file = await ctx.api.getFile(reply.photo[reply.photo.length - 1].file_id);
+        const url = `https://api.telegram.org/file/bot${deps.botToken}/${file.file_path}`;
+        images.push(await toDataUrl(url));
+      } catch (e) {
+        log.warn({ err: e }, "Failed to download reference image from reply");
+      }
+    }
+    return images;
+  }
+
+  const generateImageTool: ToolDefinition = {
+    name: "generate_image",
+    description:
+      "Generate a new image or edit an existing reference image. Use this when the user asks you to create, draw, generate, edit, or modify an image. If reference images were provided in the conversation, they will be used as the basis for editing. Output only the prompt — the image is sent to the user automatically.",
+    parameters: {
+      type: "object",
+      properties: {
+        prompt: {
+          type: "string",
+          description:
+            "The image generation/editing prompt. Be concrete and descriptive. For editing, describe the full desired result (not just the change).",
+        },
+      },
+      required: ["prompt"],
+    },
+    execute: async (args, tenant) => {
+      const prompt = String(args.prompt ?? "");
+      if (!prompt) return "No prompt provided for image generation.";
+
+      const tk = threadKey(tenant);
+      const references = threadReferenceImages.get(tk) ?? [];
+      const referenceUrl = references.length > 0 ? references[0] : undefined;
+
+      try {
+        const buffer = await deps.llm.generateImage(prompt, referenceUrl);
+        if (!buffer) return "No image was generated. Try a different prompt.";
+
+        const sent = await bot.api.sendPhoto(
+          tenant.chatId,
+          new InputFile(buffer, "image.png"),
+          {
+            ...(tenant.threadId != null ? { message_thread_id: tenant.threadId } : {}),
+            reply_markup: imageKeyboard(),
+          }
+        );
+        imageControls.set(imageControlKey(tenant.chatId, sent.message_id), {
+          prompt,
+          imageUrl: referenceUrl,
+        });
+        return `Image generated and sent to the user (message_id: ${sent.message_id}).`;
+      } catch (e) {
+        log.error({ err: e }, "generate_image tool failed");
+        return `Failed to generate image: ${fmtError(e)}`;
+      }
+    },
+  };
 
   const enqueue = (key: string, job: () => Promise<void>) => {
     const previous = queues.get(key) ?? Promise.resolve();
@@ -162,6 +255,13 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
         : "");
     if (!text) return "";
     return `Context: the user is replying to this message:\n${text.slice(0, 2000)}\n\n`;
+  };
+
+  const replyImageContextNote = (ctx: GrammyContext): string => {
+    const reply =
+      ctx.message && "reply_to_message" in ctx.message ? ctx.message.reply_to_message : undefined;
+    if (!reply?.photo?.length) return "";
+    return "The replied-to message contains an image. It has been collected as a reference for image generation/editing.\n\n";
   };
 
   const downloadTelegramFile = async (fileId: string) => {
@@ -338,12 +438,12 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     if (ctx.callbackQuery?.data?.startsWith("cfg:")) return next();
 
     const isGroup = ctx.chat?.type === "group" || ctx.chat?.type === "supergroup";
-    const botUsername = ctx.me?.username ?? "";
+    const meUsername = ctx.me?.username ?? "";
     const text = ctx.message?.text ?? ctx.message?.caption ?? "";
 
     const cmdMatch = text.match(/^\/(\w+)(?:@(\S+))?/);
     const isOurCommand = cmdMatch
-      ? OUR_COMMANDS.has(cmdMatch[1]) && (!cmdMatch[2] || cmdMatch[2] === botUsername)
+      ? OUR_COMMANDS.has(cmdMatch[1]) && (!cmdMatch[2] || cmdMatch[2] === meUsername)
       : false;
 
     // In groups, ignore commands addressed to other bots entirely.
@@ -352,9 +452,8 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     if (isOurCommand && PUBLIC_COMMANDS.has(cmdMatch![1])) return next();
 
     if (!hasAccess(access, chatId, ctx.from?.id)) {
-      const isMention = botUsername ? text.includes(`@${botUsername}`) : false;
-      const isDirected = !isGroup || isMention || isOurCommand;
-      if (isDirected) {
+      const directed = isDirectedAtBot(ctx);
+      if (directed) {
         await ctx.reply(
           "You need to provide an API key to use this bot. Use /config to set one up."
         );
@@ -400,8 +499,8 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     }
   }
 
-  // --- Built-in tools (memory) come from contributions ---
-  const builtinTools: ToolDefinition[] = contributions.tools;
+  // --- Built-in tools (memory + image generation) come from contributions ---
+  const builtinTools: ToolDefinition[] = [...contributions.tools, generateImageTool];
 
   const maybeSendChecklist = async (
     ctx: GrammyContext,
@@ -458,6 +557,8 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
       actionTicker.start();
       const creds = resolveCredentials(access, tenant.chatId, tenant.userId);
       const inputItems: ResponseInputItem[] = [...historyFor(tenant).slice(-20), userItem];
+      const tk = threadKey(tenant);
+      const hasReferenceImages = threadReferenceImages.has(tk);
       const text = cleanMd(
         await runChatLoop(
           {
@@ -468,6 +569,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
             userConfig: deps.userConfig,
             sandbox: deps.sandbox,
             builtinTools,
+            hasReferenceImages,
           },
           tenant,
           inputItems,
@@ -575,25 +677,28 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
 
     enqueue(key, async () => {
       const combined = burst.items.map((item) => `${item.tag}${item.text}`).join("\n");
-      const content = `${replyContext(last.ctx)}${combined}`;
+      const content = `${replyContext(last.ctx)}${replyImageContextNote(last.ctx)}${combined}`;
       const userItem: ResponseInputItem = {
         type: "message",
         role: "user",
         content,
       };
       await runLlmReply(last.ctx, last.tenant, userItem, combined, "text");
+      threadReferenceImages.delete(key);
     });
   };
 
   // --- Text handler ---
   bot.on("message:text", async (ctx) => {
-    const isPM = ctx.chat.type === "private";
-    const mention = ctx.message.text.includes(`@${ctx.me.username}`);
-    if (!isPM && !mention) return;
+    if (!isDirectedAtBot(ctx)) return;
 
     const tenant = tenantFromGrammy(ctx);
     const tk = threadKey(tenant);
     reactSafely(ctx, "👀");
+
+    // Collect reference images from replied-to message for the generate_image tool.
+    const refs = await collectReferenceImages(ctx);
+    if (refs.length > 0) threadReferenceImages.set(tk, refs);
 
     const existing = textBursts.get(tk);
     if (existing) clearTimeout(existing.timer);
@@ -610,7 +715,6 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
 
   // --- Photo handler (image edit or vision) ---
   bot.on("message:photo", async (ctx) => {
-    const isPM = ctx.chat.type === "private";
     const captionRaw = ctx.message.caption?.trim() || "";
     const imageMatch = captionRaw.match(IMAGE_CMD_RE);
     const tenant = tenantFromGrammy(ctx);
@@ -698,9 +802,8 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
       return;
     }
 
-    // --- Vision analysis ---
-    const hasMention = captionRaw.includes(`@${ctx.me.username}`);
-    if (!isPM && (!captionRaw || !hasMention)) return;
+    // --- Vision analysis (photo sent with a question for Skye) ---
+    if (!isDirectedAtBot(ctx)) return;
     if (deps.llm.supportsImages() === false) {
       await ctx.reply(
         "The current model does not support image input. Send text or switch to a vision-capable model.",
@@ -708,6 +811,9 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
       );
       return;
     }
+    // Collect reference images from the replied-to message (if any) for the generate_image tool.
+    const replyRefs = await collectReferenceImages(ctx);
+    if (replyRefs.length > 0) threadReferenceImages.set(tk, replyRefs);
     enqueue(tk, async () => {
       try {
         const file = await ctx.api.getFile(ctx.message.photo.pop()!.file_id);
@@ -716,7 +822,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
 
         const tag = senderTag(ctx);
         const contentParts: { type: string; text?: string; image_url?: string }[] = [];
-        const textPart = `${replyContext(ctx)}${tag}${captionRaw || "Please analyze this image."}`;
+        const textPart = `${replyContext(ctx)}${replyImageContextNote(ctx)}${tag}${captionRaw || "Please analyze this image."}`;
         if (textPart) contentParts.push({ type: "input_text", text: textPart });
         else if (tag) contentParts.push({ type: "input_text", text: tag.trim() });
         contentParts.push({ type: "input_image", image_url: dataUrl });
@@ -727,6 +833,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
           content: contentParts as never,
         };
         await runLlmReply(ctx, tenant, userItem, textPart, "photo");
+        threadReferenceImages.delete(tk);
       } catch (e) {
         log.error({ ...serializeError(e) }, "Photo preparation failed");
         await ctx
@@ -748,10 +855,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
       return;
     }
 
-    const isPM = ctx.chat.type === "private";
-    const captionRaw = ctx.message.caption?.trim() || "";
-    const mention = captionRaw.includes(`@${ctx.me.username}`);
-    if (!isPM && !mention) return;
+    if (!isDirectedAtBot(ctx)) return;
 
     const tenant = tenantFromGrammy(ctx);
     const tk = threadKey(tenant);
@@ -798,10 +902,8 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
 
   // --- Text/code document handler ---
   bot.on("message:document", async (ctx) => {
-    const isPM = ctx.chat.type === "private";
     const captionRaw = ctx.message.caption?.trim() || "";
-    const mention = captionRaw.includes(`@${ctx.me.username}`);
-    if (!isPM && !mention) return;
+    if (!isDirectedAtBot(ctx)) return;
 
     const doc = ctx.message.document;
     const filename = doc.file_name ?? "document";
@@ -853,10 +955,8 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
 
   // --- Audio file handler (best effort, SpeechKit currently expects OGG Opus) ---
   bot.on("message:audio", async (ctx) => {
-    const isPM = ctx.chat.type === "private";
     const captionRaw = ctx.message.caption?.trim() || "";
-    const mention = captionRaw.includes(`@${ctx.me.username}`);
-    if (!isPM && !mention) return;
+    if (!isDirectedAtBot(ctx)) return;
 
     const tenant = tenantFromGrammy(ctx);
     const tk = threadKey(tenant);
@@ -892,8 +992,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
   });
 
   bot.on("message:video_note", async (ctx) => {
-    const isPM = ctx.chat.type === "private";
-    if (!isPM) return;
+    if (!isDirectedAtBot(ctx)) return;
 
     const tenant = tenantFromGrammy(ctx);
     const tk = threadKey(tenant);

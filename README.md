@@ -20,7 +20,7 @@
 
 ```bash
 pnpm install
-cp env.example .env   # then fill in BOT_TOKEN, OPENAI_KEY, etc.
+cp config.example.yaml config.yaml   # then fill in bot_token, openai_key, etc.
 pnpm run dev          # or dev:pretty for human-readable logs
 ```
 

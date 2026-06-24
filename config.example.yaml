@@ -1,0 +1,87 @@
+bot_token: "123456789:ABCdefGhIJKlmnoPQRstuVWxyz_example"
+# Prevent two local long-polling bot processes from using the same BOT_TOKEN.
+# Set to "0" only if your deployment uses another single-instance mechanism.
+telegram_polling_lock: "1"
+allowed_ids: ""
+
+openai_key: "sk-or-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+max_completion_tokens: 500
+model: "openai/gpt-oss-120b"
+base_url: "https://openrouter.ai/api/v1"
+
+# Force Chat Completions API instead of Responses API.
+# Set to "true" if your provider doesn't support the Responses API
+# (Ollama, vLLM, most self-hosted inference servers). Defaults to "false".
+# use_chat_completions: false
+
+# Image generation provider (used by /image and image editing).
+# Independent from chat — fill these in if your chat provider doesn't support
+# OpenRouter's chat-completions image modality (e.g. when base_url points to
+# Ollama). If left empty, falls back to base_url/openai_key above.
+# Recommended: OpenRouter with the Gemini image model.
+image:
+  base_url: ""
+  api_key: ""
+  model: "google/gemini-3.1-flash-image-preview"
+
+# Yandex Cloud SpeechKit — single Api-Key drives both STT and TTS.
+# Get one at https://aistudio.yandex.ru (Service Account → Api-Key).
+voice:
+  yc_api_key: ""
+  yc_folder_id: ""
+  # TTS voice settings (Yandex SpeechKit). Optional — sensible defaults below.
+  # Voice catalogue: https://aistudio.yandex.ru/docs/ru/speechkit/tts/voices.html
+  # Russian options include: jane, omazh, alena, oksana, zahar, ermil, filipp
+  tts_voice: "jane"
+  # Emotion: neutral | good | evil | strict | friendly (voice-dependent)
+  tts_emotion: "neutral"
+  # BCP-47 language tag — ru-RU | en-US | tr-TR | kk-KK | uz-UZ ...
+  tts_lang: "ru-RU"
+  # Playback speed: 0.1 – 3.0 (1.0 is normal)
+  tts_speed: 1.0
+
+# Logging (pino)
+# Levels: trace | debug | info | warn | error | fatal
+log_level: "info"
+
+# Audit log retention — two independent guards, whichever is stricter applies first
+audit:
+  # Keep rows for this many days (default: 90)
+  retention_days: 90
+  # Keep at most this many rows total (default: 100 000 ≈ ~20 MB)
+  max_rows: 100000
+
+# MCP (Model Context Protocol) — path to mcp.json config file
+# Defaults to ./mcp.json in the project root
+# mcp:
+#   config_path: "./mcp.json"
+#
+# For HTTP MCP servers, set inputs as environment variables.
+# For example, if mcp.json contains "Authorization": "Bearer ${input:github_mcp_pat}",
+# add the PAT here using the input id as the variable name:
+# github_mcp_pat: "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Settings Panel (Telegram Mini App)
+panel:
+  # Public URL where the Mini App is accessible (set in BotFather too)
+  webapp_url: "http://localhost:3001"
+  # Port for the panel web server
+  webapp_port: 3001
+
+# Database path. Supports ":memory:" for ephemeral storage.
+# db_path: "data/skye.db"
+
+# Vercel Sandbox — isolated per-chat compute with internet access.
+# Get a token at https://vercel.com/account/tokens and your project/team IDs
+# from the Vercel dashboard. If the bot runs on Vercel you can omit these and
+# rely on VERCEL_OIDC_TOKEN instead (set by the Vercel runtime as an env var).
+sandbox:
+  enabled: true
+  runtime: "node24"
+  timeout_ms: 300000
+  vcpus: 2
+  persistent: false
+  command_timeout_ms: 60000
+  vercel_access_token: ""
+  vercel_project_id: ""
+  vercel_team_id: ""

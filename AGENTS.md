@@ -62,9 +62,11 @@ Run `pnpm run typecheck`, `pnpm run lint`, and `pnpm run test` before submitting
 
 ## Configuration & Secrets
 
-Create a `.env` file based on `env.example`. Required: `BOT_TOKEN`, `OPENAI_KEY`. Everything else has sensible defaults (OpenRouter). Never commit real secrets (`.env` is gitignored). Full variable reference lives in `env.example` and `docs/configuration.md`.
+Create a `config.yaml` based on `config.example.yaml`. Required: `bot_token`, `openai_key`. Everything else has sensible defaults (OpenRouter). Never commit real secrets (`config.yaml` is gitignored). Full variable reference lives in `config.example.yaml` and `docs/configuration.md`.
 
-Credential precedence for LLM calls: per-user key → per-chat key → global `OPENAI_KEY`.
+Real environment variables override YAML values — useful for platform-injected secrets (e.g. `VERCEL_OIDC_TOKEN` on Vercel hosting) or PaaS dashboards that don't allow mounting config files.
+
+Credential precedence for LLM calls: per-user key → per-chat key → global `openai_key`.
 
 ## Useful Pointers
 

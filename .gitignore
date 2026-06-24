@@ -1,5 +1,6 @@
 .parcel-cache
 .env
+config.yaml
 dist
 node_modules
 .DS_Store

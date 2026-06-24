@@ -109,7 +109,8 @@ export function buildSystemPrompt(
   chatContext?: ChatContext,
   mcpToolNames?: string[],
   customPrompt?: string,
-  sandboxEnabled?: boolean
+  sandboxEnabled?: boolean,
+  hasReferenceImages?: boolean
 ): string {
   let content = SYSTEM_PROMPT;
 
@@ -165,6 +166,18 @@ Available sandbox tools:
 - sandbox_reset — wipe the sandbox and start fresh
 
 The sandbox is ephemeral by default: its filesystem is discarded when the VM stops, so do not rely on it for long-term storage. Keep files inside /vercel/sandbox unless you need system paths.`;
+  }
+
+  if (hasReferenceImages) {
+    content += `
+
+## Image Generation
+
+You have access to a generate_image tool. Use it when the user explicitly asks you to create, draw, generate, edit, or modify an image — never generate images unprompted.
+
+If the conversation includes reference images (from the user's message or a replied-to message), those images are automatically passed to the tool as the basis for editing. Describe the full desired result in the prompt, not just the change — e.g. "a photo of this person with a beard" rather than "add a beard".
+
+After the tool runs, the image is sent to the user automatically. Do not say you are sending it — just respond naturally as if you showed them the result.`;
   }
 
   content += `

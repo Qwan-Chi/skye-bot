@@ -53,6 +53,9 @@ export const llmEnvSchema = z.object({
   PDF_ENGINE: z.string().default(""),
   // Maximum PDF file size to accept, in bytes (default 25 MB).
   PDF_MAX_BYTES: z.coerce.number().positive().default(25 * 1024 * 1024),
+  // Bot owner / author — shown in the system prompt as a higher-weight user.
+  OWNER_NAME: z.string().default(""),
+  OWNER_TAG: z.string().default(""),
 });
 
 export type LlmEnv = z.infer<typeof llmEnvSchema>;

@@ -26,6 +26,8 @@ export interface ChatLoopDeps {
   modelId?: string;
   /** Meter one LLM round-trip's token usage against the caller's quota. */
   onUsage?: (usage: { promptTokens: number; completionTokens: number }, modelId: string) => void;
+  /** Bot owner info (name + Telegram handle) to weight in the system prompt. */
+  owner?: { name: string; tag: string };
 }
 
 /**
@@ -74,7 +76,8 @@ export async function runChatLoop(
     deps.sandbox?.isEnabled(),
     deps.hasReferenceImages,
     !!deps.reminders,
-    modelEntry.name
+    modelEntry.name,
+    deps.owner
   );
 
   // Log the request summary (last user item text + attachments).

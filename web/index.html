@@ -9,11 +9,8 @@
     <script type="module" src="/src/main.js"></script>
   </head>
   <body x-data="app" x-cloak>
-    <!-- Top header — title + bot subtitle, mirrors iOS modal sheet title -->
-    <header class="topbar" :style="`padding-top: calc(env(safe-area-inset-top) + 12px)`">
-      <h1 class="topbar-title">Skye</h1>
-      <p class="topbar-subtitle">Settings</p>
-    </header>
+    <!-- Spacer for safe-area — Telegram adds its own title decoration in fullscreen -->
+    <div class="topbar-spacer" :style="`height: calc(env(safe-area-inset-top) + 12px)`"></div>
 
     <main class="content" :style="`padding-bottom: calc(env(safe-area-inset-bottom) + 80px)`">
       <!-- Profile tab -->

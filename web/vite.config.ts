@@ -1,6 +1,8 @@
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  plugins: [react()],
   build: {
     outDir: "dist",
     target: "es2020",
@@ -8,8 +10,8 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        // Keep names short — they're cached behind the panel's auth gate.
         entryFileNames: "assets/app.[hash].js",
+        chunkFileNames: "assets/[name].[hash].js",
         assetFileNames: "assets/[name].[hash][extname]",
       },
     },

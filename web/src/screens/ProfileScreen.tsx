@@ -1,0 +1,119 @@
+import { useApp } from "../store";
+import { Caption, Footnote, Hint, LargeTitle, Section } from "../components/ui";
+import { List, Row } from "../components/Row";
+import { Switch } from "../components/Switch";
+import { Icon } from "../components/Icon";
+import { fmtTokens, formatDate } from "../lib/format";
+import { haptic } from "../lib/telegram";
+
+export function ProfileScreen() {
+  const {
+    user,
+    config,
+    chatConfig,
+    billing,
+    dirty,
+    updateConfig,
+    saveConfig,
+    toggleVoice,
+    setTab,
+  } = useApp();
+
+  const acc = billing.account;
+  const activeModelId = acc?.modelId || billing.defaultModelId;
+  const model = billing.models.find((m) => m.id === activeModelId);
+  const hasSub = acc?.hasActiveSub ?? false;
+
+  return (
+    <div className="fade-in">
+      <LargeTitle>Settings</LargeTitle>
+
+      <Section>
+        <Caption>Account</Caption>
+        <List>
+          <Row
+            icon={Icon.UserCircle}
+            color="c-blue"
+            title={user.name || "Guest"}
+            subtitle={user.handle}
+            chevron={false}
+          />
+        </List>
+      </Section>
+
+      <Section>
+        <Caption>Skye Plus</Caption>
+        <List>
+          <Row
+            icon={Icon.Sparkles}
+            color="c-purple"
+            title={hasSub ? "Skye Plus Active" : "Unlock Skye Plus"}
+            subtitle={
+              hasSub
+                ? `${fmtTokens(acc?.remaining)} tokens · renews ${formatDate(acc!.subExpiresAt * 1000)}`
+                : `${billing.plans?.subscriptionStars ?? 1899} ⭐ / 30 days`
+            }
+            onClick={() => {
+              haptic.light();
+              setTab("plus");
+            }}
+          />
+        </List>
+      </Section>
+
+      <Section>
+        <Caption>Model</Caption>
+        <List>
+          <Row
+            icon={Icon.Cpu}
+            color="c-indigo"
+            title={model?.name ?? "Default"}
+            subtitle={`${model?.multiplier ?? 1}× token cost`}
+            onClick={() => setTab("plus")}
+          />
+        </List>
+      </Section>
+
+      <Section>
+        <Caption>Custom Instructions</Caption>
+        <List>
+          <li className="row no-sep">
+            <textarea
+              className="field textarea"
+              rows={5}
+              placeholder="e.g. Always respond in Spanish. Be more formal."
+              value={config.systemPrompt ?? ""}
+              spellCheck={false}
+              onChange={(e) => updateConfig({ systemPrompt: e.target.value })}
+            />
+          </li>
+        </List>
+        <Footnote>Appended to Skye's default personality.</Footnote>
+      </Section>
+
+      <Section>
+        <Caption>Chat</Caption>
+        <List>
+          <Row
+            icon={Icon.Speaker}
+            color="c-green"
+            title="Voice Mode"
+            subtitle="Send replies as voice notes via Yandex SpeechKit"
+            chevron={false}
+            trailing={<Switch on={chatConfig.voiceMode} onChange={() => toggleVoice()} ariaLabel="Voice mode" />}
+            onClick={() => toggleVoice()}
+          />
+        </List>
+        <Hint>Toggle how Skye replies in this chat.</Hint>
+      </Section>
+
+      {dirty && (
+        <div className="savebar">
+          <button className="button button-fill" onClick={() => saveConfig()}>
+            Save Changes
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

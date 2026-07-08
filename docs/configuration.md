@@ -112,6 +112,18 @@ See [MCP Tools](mcp-tools.md) for configuration details.
 | `panel.webapp_url`  | Public URL where the Telegram Mini App is accessible. Set this in BotFather too. |
 | `panel.webapp_port` | Port for the panel web server. Default: `3001`.                                  |
 
+### Legal
+
+Surfaced via the `/terms`, `/privacy`, `/paysupport`, `/developer_info`, and `/delete_my_data` commands. Override to point at your own hosted documents and support contacts.
+
+| Key                | Purpose                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `legal.terms_url`    | Public Terms of Service URL opened by /terms. Default: Skye project ToS.                    |
+| `legal.privacy_url`  | Public Privacy Policy URL opened by /privacy. Default: Skye project privacy policy.         |
+| `legal.support_username` | Telegram handle shown by /paysupport and /developer_info. Default: `@overwaven`.       |
+| `legal.developer_name`   | Developer name shown by /developer_info. Default: `Sergey Gamuylo`.                    |
+| `legal.developer_email`  | Contact email shown by /paysupport and /developer_info. Default: `serg@skye-bot.com`.  |
+
 ### Vercel Sandbox
 
 | Key                | Purpose                                                                                   |

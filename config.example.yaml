@@ -234,3 +234,13 @@ channel:
   enabled: false
   chat_id: ""
   admin_only: true
+
+# Legal — surfaced via the /terms, /privacy, /paysupport, /developer_info
+# and /delete_my_data commands. Override these to point at your own hosted
+# documents and support contacts. Defaults point at the Skye project pages.
+legal:
+  terms_url: "https://shiftlinehq.craft.me/skye-terms"
+  privacy_url: "https://shiftlinehq.craft.me/skye-privacy"
+  support_username: "@overwaven"
+  developer_name: "Sergey Gamuylo"
+  developer_email: "serg@skye-bot.com"

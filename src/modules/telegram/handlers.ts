@@ -632,6 +632,8 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
           "---",
           "",
           "Commands: /reset · /image · /voice · /memories · /forget · /status · /tools · /catchup · /reminders · /config",
+          "",
+          "Legal: /terms · /privacy · /paysupport · /developer_info · /delete_my_data",
         ].join("\n");
         await sendRichReply(ctx, md);
       },

@@ -13,6 +13,11 @@ Skye supports several interaction modes and commands. This page covers what you 
 | `/forget`         | Clears all long-term memories for the current chat. Conversation history is not affected.                 | No      |
 | `/status`         | Shows current model, vision, voice, memory, context, and MCP capability status.                           | Yes     |
 | `/catchup`        | Summarizes the current group context from the rolling chat summary and recent log.                        | Yes     |
+| `/terms`          | Opens the Terms of Service.                                                                                | Yes     |
+| `/privacy`        | Opens the Privacy Policy.                                                                                  | Yes     |
+| `/paysupport`     | Shows payment support contact details (Telegram + email).                                                  | Yes     |
+| `/developer_info` | Shows the developer's name and contact details.                                                            | Yes     |
+| `/delete_my_data` | Permanently erases all data Skye stores about you (private chats only, with confirmation).                 | Yes     |
 
 ## Interactions
 

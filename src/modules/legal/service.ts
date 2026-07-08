@@ -1,0 +1,66 @@
+import { getDb } from "../../core/db.js";
+
+export interface DeletionSummary {
+  userConfigs: number;
+  userMcpServers: number;
+  userMcpInputs: number;
+  billingAccounts: number;
+  billingEvents: number;
+  memories: number;
+  chatSummaries: number;
+  conversationItems: number;
+  groupMessages: number;
+  chatConfigs: number;
+  reminders: number;
+  requestLogs: number;
+}
+
+/**
+ * Permanently delete all data associated with a Telegram user.
+ *
+ * Two scopes are wiped:
+ *   1. Per-user data keyed by `user_id` — user configs, MCP servers (+ their
+ *      inputs), billing accounts/events, reminders the user created, audit
+ *      request logs.
+ *   2. Private-chat data where `chat_id = userId` (in DMs chatId === userId) —
+ *      memories, chat summaries, conversation items, group messages, chat
+ *      config.
+ *
+ * Group-scoped data (memories, summaries, conversation history in shared
+ * chats) is left intact because it belongs to the group, not the individual.
+ * Channel posts are shared content and are never touched here.
+ */
+export function deleteUserData(userId: number): DeletionSummary {
+  const db = getDb();
+  const changes = (sql: string): number => db.prepare(sql).run(userId).changes;
+
+  const userMcpInputs = changes(
+    `DELETE FROM user_mcp_inputs
+     WHERE server_id IN (SELECT id FROM user_mcp_servers WHERE user_id = ?)`
+  );
+
+  const summary: DeletionSummary = {
+    userConfigs: changes("DELETE FROM user_configs WHERE user_id = ?"),
+    userMcpServers: changes("DELETE FROM user_mcp_servers WHERE user_id = ?"),
+    userMcpInputs,
+    billingAccounts: changes("DELETE FROM billing_accounts WHERE user_id = ?"),
+    billingEvents: changes("DELETE FROM billing_events WHERE user_id = ?"),
+    memories: changes("DELETE FROM memories WHERE chat_id = ?"),
+    chatSummaries: changes("DELETE FROM chat_summaries WHERE chat_id = ?"),
+    conversationItems: changes("DELETE FROM conversation_items WHERE chat_id = ?"),
+    groupMessages: changes("DELETE FROM group_messages WHERE chat_id = ?"),
+    chatConfigs: changes("DELETE FROM chat_configs WHERE chat_id = ?"),
+    reminders: changes("DELETE FROM reminders WHERE user_id = ?"),
+    requestLogs: changes("DELETE FROM request_logs WHERE user_id = ?"),
+  };
+
+  return summary;
+}
+
+export interface LegalService {
+  deleteUserData(userId: number): DeletionSummary;
+}
+
+export const legalService: LegalService = {
+  deleteUserData,
+};

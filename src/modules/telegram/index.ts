@@ -1,5 +1,6 @@
 import { Bot } from "grammy";
 import { createHash } from "crypto";
+import { hostname } from "os";
 import {
   closeSync,
   existsSync,
@@ -131,6 +132,7 @@ function acquirePollingLock(token: string): () => void {
       JSON.stringify(
         {
           pid: process.pid,
+          hostname: hostname(),
           startedAt: new Date().toISOString(),
           cwd: process.cwd(),
           node: process.version,
@@ -150,7 +152,7 @@ function acquirePollingLock(token: string): () => void {
     if (code !== "EEXIST") throw e;
 
     const holder = readLock(path);
-    if (holder.pid && isProcessAlive(holder.pid)) {
+    if (holder.pid && holder.hostname === hostname() && isProcessAlive(holder.pid)) {
       throw new Error(
         `Telegram polling is already locked by PID ${holder.pid}. Stop the other bot process or remove ${path} if it is stale.`
       );
@@ -176,11 +178,16 @@ function acquirePollingLock(token: string): () => void {
   };
 }
 
-function readLock(path: string): { pid?: number } {
+function readLock(path: string): { pid?: number; hostname?: string } {
   try {
     const raw = readFileSync(path, "utf8");
-    const parsed = JSON.parse(raw) as { pid?: unknown };
-    return typeof parsed.pid === "number" ? { pid: parsed.pid } : {};
+    const parsed = JSON.parse(raw) as { pid?: unknown; hostname?: unknown };
+    return typeof parsed.pid === "number"
+      ? {
+          pid: parsed.pid,
+          ...(typeof parsed.hostname === "string" ? { hostname: parsed.hostname } : {}),
+        }
+      : {};
   } catch {
     return {};
   }

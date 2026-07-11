@@ -1,6 +1,8 @@
 .parcel-cache
 .env
 config.yaml
+monitoring/.env
+monitoring/uptime-kuma/
 dist
 node_modules
 .DS_Store

@@ -27,6 +27,35 @@ export const panelModule: SkyeModule = {
     const app: Express = extra.app ?? express();
     app.use(express.json());
 
+    app.get("/healthz", (_req: Request, res: Response) => {
+      res.json({ status: "ok", uptimeSeconds: Math.floor(process.uptime()) });
+    });
+
+    app.get("/metrics", (_req: Request, res: Response) => {
+      const memory = process.memoryUsage();
+      const usage = process.cpuUsage();
+      res.type("text/plain; version=0.0.4; charset=utf-8").send(
+        [
+          "# HELP skye_process_uptime_seconds Seconds since the Skye process started.",
+          "# TYPE skye_process_uptime_seconds gauge",
+          `skye_process_uptime_seconds ${process.uptime()}`,
+          "# HELP skye_process_resident_memory_bytes Resident memory used by Skye.",
+          "# TYPE skye_process_resident_memory_bytes gauge",
+          `skye_process_resident_memory_bytes ${memory.rss}`,
+          "# HELP skye_process_heap_used_bytes JavaScript heap used by Skye.",
+          "# TYPE skye_process_heap_used_bytes gauge",
+          `skye_process_heap_used_bytes ${memory.heapUsed}`,
+          "# HELP skye_process_cpu_user_microseconds CPU time used in user space.",
+          "# TYPE skye_process_cpu_user_microseconds counter",
+          `skye_process_cpu_user_microseconds ${usage.user}`,
+          "# HELP skye_process_cpu_system_microseconds CPU time used in kernel space.",
+          "# TYPE skye_process_cpu_system_microseconds counter",
+          `skye_process_cpu_system_microseconds ${usage.system}`,
+          "",
+        ].join("\n")
+      );
+    });
+
     // Auth middleware — populates req.tenant from validated initData.
     app.use("/api", (req: Request, res: Response, next: NextFunction) => {
       const initData = req.headers["x-telegram-init-data"];

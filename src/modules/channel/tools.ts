@@ -170,6 +170,8 @@ export function channelTools(deps: ChannelToolDeps): ToolDefinition[] {
     },
     {
       name: "list_channel_posts",
+      readOnly: true,
+      timeoutMs: 10_000,
       description:
         "List recent posts from the managed channel that have been captured by Skye. Returns their message ids, senders, and a text preview. Use this to look up a message id before editing or deleting.",
       parameters: {

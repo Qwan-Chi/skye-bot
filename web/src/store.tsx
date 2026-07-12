@@ -87,7 +87,7 @@ export function useApp(): AppState {
 }
 
 const EMPTY = {
-  config: { systemPrompt: "" },
+  config: { systemPrompt: "", personality: "skye" as const },
   chatConfig: { voiceMode: false },
   mcpServers: [],
   memories: [],

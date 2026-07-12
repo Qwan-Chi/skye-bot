@@ -89,6 +89,8 @@ export function reminderTools(service: RemindersService): ToolDefinition[] {
     },
     {
       name: "list_reminders",
+      readOnly: true,
+      timeoutMs: 5_000,
       description:
         "List all active reminders for this chat. Returns their IDs, fire times, repeat settings, and prompts.",
       parameters: {

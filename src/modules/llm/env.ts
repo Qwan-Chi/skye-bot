@@ -7,6 +7,8 @@ export const modelSchema = z.object({
   name: z.string().min(1),
   model: z.string().min(1),
   multiplier: z.coerce.number().positive().default(1),
+  /** Provider context window used by the dynamic conversation builder. */
+  contextWindow: z.coerce.number().int().positive().default(128_000),
   /** Provider routing: "openrouter" (default) or "perplexity". */
   provider: z.enum(["openrouter", "perplexity"]).optional(),
   /** Perplexity built-in (server-side) tools to enable for this model. */
@@ -32,10 +34,10 @@ const modelsArray = z.string().transform((raw, ctx): ModelEntry[] => {
 });
 
 const defaultModels: ModelEntry[] = [
-  { id: "sydney", name: "Sydney", model: "google/gemini-3.1-flash-lite", multiplier: 1 },
-  { id: "tokyo", name: "Tokyo", model: "openai/gpt-oss-20b", multiplier: 1.5 },
-  { id: "berlin", name: "Berlin", model: "anthropic/claude-3.7-sonnet", multiplier: 2.5 },
-  { id: "toronto", name: "Toronto", model: "openai/gpt-5.5", multiplier: 4 },
+  { id: "sydney", name: "Sydney", model: "google/gemini-3.1-flash-lite", multiplier: 1, contextWindow: 128_000 },
+  { id: "tokyo", name: "Tokyo", model: "openai/gpt-oss-20b", multiplier: 1.5, contextWindow: 128_000 },
+  { id: "berlin", name: "Berlin", model: "anthropic/claude-3.7-sonnet", multiplier: 2.5, contextWindow: 128_000 },
+  { id: "toronto", name: "Toronto", model: "openai/gpt-5.5", multiplier: 4, contextWindow: 128_000 },
 ];
 
 export const llmEnvSchema = z.object({

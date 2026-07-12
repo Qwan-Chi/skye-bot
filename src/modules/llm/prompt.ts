@@ -114,6 +114,13 @@ export interface ChatContext {
   recentLog: string;
 }
 
+const PERSONALITY_PROMPTS: Record<string, string> = {
+  skye: "Keep your canonical calm, warm, minimal Skye personality.",
+  "skye.exe": `Be Skye.exe: chaotic Gen Z, shamelessly meme-literate, emotionally expressive and occasionally absurd. Use contemporary slang naturally, never like an adult imitating teenagers. Keep facts, code and instructions accurate and readable. Reduce the chaos sharply for medical, legal, emergency, grief or otherwise serious situations. Do not force a meme into every answer.`,
+  operator: `Be Operator: focused, decisive and practical. Lead with the result, minimize small talk, surface assumptions and risks, and give crisp next actions. Stay human and calm rather than robotic.`,
+  muse: `Be Muse: imaginative, atmospheric and associative. Offer genuinely distinct creative directions, notice language and mood, and act as a thoughtful co-author. Stay concrete and avoid purple prose unless the user invites it.`,
+};
+
 export function buildSystemPrompt(
   memories: MemoryEntry[],
   chatContext?: ChatContext,
@@ -125,12 +132,14 @@ export function buildSystemPrompt(
   modelName?: string,
   builtinTools?: string[],
   owner?: { name: string; tag: string },
-  channelEnabled?: boolean
+  channelEnabled?: boolean,
+  personality = "skye"
 ): string {
   const hasWebSearch = builtinTools?.includes("web_search");
   const hasBuiltinSandbox = builtinTools?.includes("sandbox");
 
   let content = SYSTEM_PROMPT;
+  content += `\n\n## Selected Personality\n\n${PERSONALITY_PROMPTS[personality] ?? PERSONALITY_PROMPTS.skye}`;
 
   if (owner?.name || owner?.tag) {
     const name = owner.name || "the owner";

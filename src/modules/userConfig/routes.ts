@@ -26,6 +26,9 @@ export function buildRoutes(ctx: ModuleContext): PanelRoute[] {
         const body = req.body as Partial<UserConfig>;
         const clean: UserConfig = {};
         if (body.systemPrompt !== undefined) clean.systemPrompt = body.systemPrompt;
+        if (["skye", "skye.exe", "operator", "muse"].includes(body.personality ?? "")) {
+          clean.personality = body.personality;
+        }
         userConfig.set(userId, clean);
         res.json(userConfig.get(userId));
       },

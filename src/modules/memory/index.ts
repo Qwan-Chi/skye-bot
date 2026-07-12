@@ -60,6 +60,8 @@ const memoryTools: ToolDefinition[] = [
   },
   {
     name: "search_memory",
+    readOnly: true,
+    timeoutMs: 5_000,
     description:
       "Search relevant, non-expired long-term memories for this chat instead of loading every memory.",
     parameters: {

@@ -75,6 +75,8 @@ export function sandboxTools(service: SandboxService): ToolDefinition[] {
     },
     {
       name: "sandbox_read_file",
+      readOnly: true,
+      timeoutMs: 15_000,
       description:
         "Read a text file from the sandbox. Returns an error if the file does not exist.",
       parameters: {
@@ -92,6 +94,8 @@ export function sandboxTools(service: SandboxService): ToolDefinition[] {
     },
     {
       name: "sandbox_list_files",
+      readOnly: true,
+      timeoutMs: 15_000,
       description: "List files and directories inside the sandbox at the given path.",
       parameters: {
         type: "object",

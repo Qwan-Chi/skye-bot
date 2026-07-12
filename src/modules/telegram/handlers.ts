@@ -517,6 +517,26 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     return sanitizeHistory(items);
   };
 
+  const contextFor = (
+    tenant: ReturnType<typeof tenantFromGrammy>,
+    modelId: string
+  ): ResponseInputItem[] => {
+    const history = historyFor(tenant);
+    const model = deps.llm.resolveModel(modelId);
+    const inputBudget = Math.max(4_000, model.contextWindow - 8_000);
+    let estimatedTokens = 0;
+    const selected: ResponseInputItem[] = [];
+    for (let index = history.length - 1; index >= 0; index--) {
+      const item = history[index];
+      const itemTokens = Math.ceil(JSON.stringify(item).length / 4);
+      if (selected.length > 0 && estimatedTokens + itemTokens > inputBudget) break;
+      selected.unshift(item);
+      estimatedTokens += itemTokens;
+    }
+    while (selected[0] && selected[0].type === "function_call_output") selected.shift();
+    return selected;
+  };
+
   const formatGroupMessage = (m: {
     sender: string;
     timestamp: string;
@@ -1169,7 +1189,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
       const modelId = billAcc?.modelId ?? deps.defaultModelId;
       // The user message was already persisted to chatLog above, so historyFor
       // already includes it. Do not append userItem again.
-      const inputItems: ResponseInputItem[] = historyFor(tenant).slice(-20);
+      const inputItems: ResponseInputItem[] = contextFor(tenant, modelId);
       const hasReferenceImages = threadReferenceImages.has(tk);
 
       // Quota pre-check: subscribers with zero tokens can't proceed.
@@ -2073,9 +2093,10 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
         };
         // The reminder prompt was already persisted to chatLog above, so
         // historyFor already includes it. Do not append userItem again.
-        const inputItems: ResponseInputItem[] = historyFor(
-          tenant as unknown as ReturnType<typeof tenantFromGrammy>
-        ).slice(-20);
+        const inputItems: ResponseInputItem[] = contextFor(
+          tenant as unknown as ReturnType<typeof tenantFromGrammy>,
+          reminderModelId
+        );
 
         const actionTicker = {
           timer: undefined as NodeJS.Timeout | undefined,
@@ -2132,8 +2153,10 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
             `[reminder reply] ${text.slice(0, 200)}`
           );
 
+          deps.events!.emit("reminders.delivered", { reminder });
           log.info({ id: reminder.id, chatId: reminder.chatId }, "Reminder processed");
         } catch (e) {
+          deps.events!.emit("reminders.failed", { reminder, error: fmtError(e) });
           log.error(
             { ...serializeError(e), reminderId: reminder.id },
             "Reminder processing failed"

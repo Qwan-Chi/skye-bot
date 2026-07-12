@@ -6,6 +6,14 @@ export interface ReminderFiredPayload {
   reminder: Reminder;
 }
 
+declare module "../../core/events.js" {
+  interface SkyeEvents {
+    "reminders.fired": ReminderFiredPayload;
+    "reminders.delivered": ReminderFiredPayload;
+    "reminders.failed": ReminderFiredPayload & { error?: string };
+  }
+}
+
 export class ReminderScheduler {
   private timer: NodeJS.Timeout | null = null;
   private firing = new Set<string>();
@@ -25,6 +33,16 @@ export class ReminderScheduler {
   start(): void {
     if (!this.settings.enabled) return;
     if (this.timer) return;
+    this.deps.events.on("reminders.delivered", ({ reminder }) => {
+      this.complete(reminder);
+      this.firing.delete(reminder.id);
+    });
+    this.deps.events.on("reminders.failed", ({ reminder, error }) => {
+      const retryAt = new Date(Date.now() + 60_000);
+      this.deps.service.reschedule(reminder.id, retryAt);
+      this.firing.delete(reminder.id);
+      log.warn({ id: reminder.id, retryAt: retryAt.toISOString(), error }, "Reminder delivery scheduled for retry");
+    });
     this.timer = setInterval(() => void this.tick(), this.settings.checkIntervalSec * 1000);
     this.timer.unref();
     log.info(
@@ -68,28 +86,24 @@ export class ReminderScheduler {
           } else {
             log.info({ id: reminder.id, chatId: reminder.chatId }, "Firing reminder");
             this.deps.events.emit("reminders.fired", { reminder });
+            return;
           }
-
-          if (reminder.repeat === "none") {
-            this.deps.service.deactivate(reminder.id);
-          } else {
-            const next = this.deps.service.advanceRepeating(reminder);
-            if (next) {
-              this.deps.service.reschedule(reminder.id, next);
-              log.info(
-                { id: reminder.id, nextFireAt: next.toISOString() },
-                "Repeating reminder rescheduled"
-              );
-            } else {
-              this.deps.service.deactivate(reminder.id);
-            }
-          }
+          this.complete(reminder);
         } catch (e) {
           log.error({ err: e, id: reminder.id }, "Failed to process fired reminder");
-        } finally {
           this.firing.delete(reminder.id);
         }
       })();
     }
+  }
+
+  private complete(reminder: Reminder): void {
+    if (reminder.repeat === "none") {
+      this.deps.service.deactivate(reminder.id);
+      return;
+    }
+    const next = this.deps.service.advanceRepeating(reminder);
+    if (next) this.deps.service.reschedule(reminder.id, next);
+    else this.deps.service.deactivate(reminder.id);
   }
 }

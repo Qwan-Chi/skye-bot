@@ -32,6 +32,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export interface UserConfig {
   systemPrompt?: string;
+  personality?: "skye" | "skye.exe" | "operator" | "muse";
 }
 
 export interface ChatConfig {

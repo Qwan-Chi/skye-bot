@@ -94,7 +94,8 @@ export async function runChatLoop(
     modelEntry.name,
     builtinTools,
     deps.owner,
-    !!deps.channel
+    !!deps.channel,
+    userCfg?.personality
   );
 
   // Log the request summary (last user item text + attachments).
@@ -182,22 +183,21 @@ export async function runChatLoop(
     const toolOutputItems: ResponseInputItem[] = [];
     const builtinMap = new Map(deps.builtinTools.map((t) => [t.name, t]));
 
-    for (const fc of fnCalls) {
+    const executeCall = async (fc: (typeof fnCalls)[number]) => {
+      signal?.throwIfAborted();
       const args = safeJsonParse(fc.arguments);
       const isMcp = deps.mcp.isMcpTool(fc.name);
-      currentToolCalls.push({ name: fc.name, args, isMcp });
+      const tool = builtinMap.get(fc.name);
 
       let result: string;
       let failed = false;
       try {
-        if (isMcp) {
-          result = await deps.mcp.execute(fc.name, args, tenant.userId);
-        } else {
-          const tool = builtinMap.get(fc.name);
-          result = tool
-            ? await Promise.resolve(tool.execute(args, tenant))
-            : `Unknown tool: ${fc.name}`;
-        }
+        const execution = isMcp
+          ? deps.mcp.execute(fc.name, args, tenant.userId)
+          : tool
+            ? Promise.resolve(tool.execute(args, tenant))
+            : Promise.resolve(`Unknown tool: ${fc.name}`);
+        result = await withTimeout(execution, tool?.timeoutMs ?? 60_000, fc.name, signal);
       } catch (e) {
         failed = true;
         result = `Tool "${fc.name}" failed: ${e instanceof Error ? e.message : String(e)}`;
@@ -211,11 +211,26 @@ export async function runChatLoop(
         text: `tool ${fc.name} ${failed ? "failed" : "ok"}: ${result.slice(0, 500)}`,
       });
 
-      toolOutputItems.push({
+      return {
+        call: { name: fc.name, args, isMcp },
+        output: {
         type: "function_call_output",
         call_id: fc.call_id,
         output: result,
-      } as ResponseInputItem);
+        } as ResponseInputItem,
+      };
+    };
+
+    const allReadOnly = fnCalls.every((fc) => builtinMap.get(fc.name)?.readOnly === true);
+    const executed = allReadOnly
+      ? await Promise.all(fnCalls.map(executeCall))
+      : await fnCalls.reduce<Promise<Awaited<ReturnType<typeof executeCall>>[]>>(
+          async (previous, fc) => [...(await previous), await executeCall(fc)],
+          Promise.resolve([])
+        );
+    for (const item of executed) {
+      currentToolCalls.push(item.call);
+      toolOutputItems.push(item.output);
     }
 
     for (const fc of fnCalls) currentInput.push(fc as ResponseInputItem);
@@ -228,6 +243,29 @@ export async function runChatLoop(
     iterations++;
   }
   return "";
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  toolName: string,
+  signal?: AbortSignal
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+  const aborted = new Promise<never>((_, reject) => {
+    signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+  });
+  try {
+    return await Promise.race([promise, timeout, aborted]);
+  } catch (e) {
+    log.warn({ err: e, tool: toolName }, "Tool execution interrupted");
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function extractInputText(input: ResponseInputItem[]): string {

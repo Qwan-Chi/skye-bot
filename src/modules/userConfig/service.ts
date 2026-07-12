@@ -2,21 +2,26 @@ import { getDb } from "../../core/db.js";
 
 export interface UserConfig {
   systemPrompt?: string;
+  personality?: "skye" | "skye.exe" | "operator" | "muse";
 }
 
 type ConfigRow = {
   systemPrompt: string | null;
+  personality: string | null;
 };
 
 export function getUserConfig(userId: number): UserConfig {
   const row = getDb()
     .prepare<[number], ConfigRow>(
-      `SELECT system_prompt AS systemPrompt FROM user_configs WHERE user_id = ?`
+      `SELECT system_prompt AS systemPrompt, personality FROM user_configs WHERE user_id = ?`
     )
     .get(userId);
   if (!row) return {};
   return {
     ...(row.systemPrompt != null ? { systemPrompt: row.systemPrompt } : {}),
+    personality: (["skye", "skye.exe", "operator", "muse"].includes(row.personality ?? "")
+      ? row.personality
+      : "skye") as UserConfig["personality"],
   };
 }
 
@@ -26,12 +31,13 @@ export function setUserConfig(userId: number, config: UserConfig): void {
 
   getDb()
     .prepare(
-      `INSERT INTO user_configs (user_id, system_prompt)
-       VALUES (?, ?)
+      `INSERT INTO user_configs (user_id, system_prompt, personality)
+       VALUES (?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET
-         system_prompt = excluded.system_prompt`
+         system_prompt = excluded.system_prompt,
+         personality = excluded.personality`
     )
-    .run(userId, merged.systemPrompt ?? null);
+    .run(userId, merged.systemPrompt ?? null, merged.personality ?? "skye");
 }
 
 export interface UserMcpServer {

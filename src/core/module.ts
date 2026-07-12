@@ -32,6 +32,10 @@ export interface ToolDefinition {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  /** Read-only tools may run concurrently when the model requests several at once. */
+  readOnly?: boolean;
+  /** Maximum execution time before a timeout result is returned to the model. */
+  timeoutMs?: number;
   execute: (args: Record<string, unknown>, tenant: TenantContext) => Promise<string> | string;
 }
 

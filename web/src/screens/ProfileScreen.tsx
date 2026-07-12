@@ -5,6 +5,14 @@ import { Switch } from "../components/Switch";
 import { Icon } from "../components/Icon";
 import { fmtTokens, formatDate } from "../lib/format";
 import { haptic } from "../lib/telegram";
+import { Segmented } from "../components/Segmented";
+
+const PERSONALITIES = [
+  { value: "skye", label: "Skye", description: "Calm, warm and concise" },
+  { value: "skye.exe", label: "Skye.exe", description: "Chaotic Gen Z energy" },
+  { value: "operator", label: "Operator", description: "Focused and decisive" },
+  { value: "muse", label: "Muse", description: "Creative co-author" },
+] as const;
 
 export function ProfileScreen() {
   const {
@@ -72,6 +80,22 @@ export function ProfileScreen() {
             onClick={() => setTab("plus")}
           />
         </List>
+      </Section>
+
+      <Section>
+        <Caption>Personality</Caption>
+        <Segmented
+          value={config.personality ?? "skye"}
+          options={PERSONALITIES.map(({ value, label }) => ({ value, label }))}
+          onChange={(personality) => {
+            haptic.selection();
+            updateConfig({ personality });
+          }}
+        />
+        <Footnote>
+          {PERSONALITIES.find((item) => item.value === (config.personality ?? "skye"))?.description}
+          . Custom instructions are applied on top.
+        </Footnote>
       </Section>
 
       <Section>

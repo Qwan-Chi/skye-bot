@@ -51,4 +51,15 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    id: "003-add-personality",
+    up: (db) => {
+      const cols = new Set(
+        (db.pragma("table_info(user_configs)") as { name: string }[]).map((c) => c.name)
+      );
+      if (!cols.has("personality")) {
+        db.exec("ALTER TABLE user_configs ADD COLUMN personality TEXT NOT NULL DEFAULT 'skye'");
+      }
+    },
+  },
 ];

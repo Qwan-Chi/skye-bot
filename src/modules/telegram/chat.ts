@@ -49,8 +49,10 @@ export async function runChatLoop(
   tenant: TenantContext,
   input: ResponseInputItem[],
   onChunk?: (snapshot: string) => void,
-  onToolCalls?: (calls: ToolCallRecord[]) => void
+  onToolCalls?: (calls: ToolCallRecord[]) => void,
+  signal?: AbortSignal
 ): Promise<string> {
+  signal?.throwIfAborted();
   const memoryQuery = extractInputText(input);
   const memories = deps.memory.search(tenant.chatId, memoryQuery, { limit: 12 });
   const chatContext = deps.chatLog.context(tenant.chatId);
@@ -121,6 +123,7 @@ export async function runChatLoop(
   let iterations = 0;
 
   while (iterations <= 5) {
+    signal?.throwIfAborted();
     deps.beforeRound?.(modelEntry.id);
     const stream = deps.llm.askStream(
       instructions,
@@ -128,12 +131,19 @@ export async function runChatLoop(
       effectiveTools.length > 0 ? effectiveTools : undefined,
       modelEntry.id
     );
+    const abortStream = () => void stream.abort();
+    signal?.addEventListener("abort", abortStream, { once: true });
 
     if (onChunk) {
       stream.on("response.output_text.delta", (event) => onChunk(event.snapshot));
     }
 
-    const response = await stream.finalResponse();
+    let response;
+    try {
+      response = await stream.finalResponse();
+    } finally {
+      signal?.removeEventListener("abort", abortStream);
+    }
 
     if (response.usage && deps.onUsage) deps.onUsage(response.usage, modelEntry.id);
 
@@ -159,6 +169,7 @@ export async function runChatLoop(
 
     // Persist assistant function calls so tool usage survives restarts.
     for (const fc of fnCalls) {
+      signal?.throwIfAborted();
       const summary = summarizeFunctionCall(fc.name, fc.arguments);
       deps.chatLog.appendConversation(tenant.chatId, tk, {
         role: "assistant",

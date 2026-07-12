@@ -490,8 +490,49 @@ export function createChatActionTicker(ctx: GrammyContext, action: ChatAction, i
 }
 
 export function createDraftManager(ctx: GrammyContext) {
+  if (ctx.chat?.type !== "private") {
+    let latestText = "Думаю…";
+    let statusMessage: Message | undefined;
+    let stopped = false;
+    let updating = Promise.resolve();
+    const timer = setTimeout(() => {
+      if (stopped || !ctx.chat) return;
+      updating = updating.then(async () => {
+        statusMessage = await ctx.reply(latestText, {
+          message_thread_id: threadId(ctx),
+          ...(ctx.message?.message_id
+            ? { reply_to_message_id: ctx.message.message_id }
+            : {}),
+        });
+      }).catch((e) => log.debug({ err: e }, "Group status message failed"));
+    }, 4_000);
+
+    return {
+      send: (text: string) => {
+        if (stopped || !text || text === latestText) return;
+        latestText = text;
+        if (!statusMessage || !ctx.chat) return;
+        updating = updating
+          .then(() => ctx.api.editMessageText(ctx.chat!.id, statusMessage!.message_id, text))
+          .then(() => undefined)
+          .catch((e) => log.debug({ err: e }, "Group status update failed"));
+      },
+      flush: async () => {
+        await updating;
+      },
+      delete: async () => {
+        stopped = true;
+        clearTimeout(timer);
+        await updating;
+        if (statusMessage && ctx.chat) {
+          await ctx.api.deleteMessage(ctx.chat.id, statusMessage.message_id).catch(() => {});
+        }
+      },
+    };
+  }
+
   const draftId = ctx.update.update_id || ctx.message?.message_id || Date.now();
-  let enabled = ctx.chat?.type === "private";
+  let enabled = true;
   let lastText = "";
   let pendingText: string | undefined;
   let sending = false;

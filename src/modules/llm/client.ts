@@ -56,6 +56,7 @@ export interface LlmResponse {
 export interface LlmStream {
   on(event: "response.output_text.delta", cb: (data: { snapshot: string }) => void): void;
   finalResponse(): Promise<LlmResponse>;
+  abort(): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,6 +75,7 @@ class ChatCompletionsStreamAdapter {
   private listeners = new Map<string, ((data: unknown) => void)[]>();
   private responsePromise: Promise<LlmResponse>;
   private resolveResponse!: (value: LlmResponse) => void;
+  private rejectResponse!: (reason: unknown) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private streamPromise: Promise<any>;
 
@@ -81,8 +83,9 @@ class ChatCompletionsStreamAdapter {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     streamPromise: Promise<any>
   ) {
-    this.responsePromise = new Promise((r) => {
-      this.resolveResponse = r;
+    this.responsePromise = new Promise((resolve, reject) => {
+      this.resolveResponse = resolve;
+      this.rejectResponse = reject;
     });
     this.streamPromise = streamPromise;
     this.process();
@@ -141,6 +144,8 @@ class ChatCompletionsStreamAdapter {
       }
     } catch (e) {
       log.warn(`Chat completions stream error: ${String(e)}`);
+      this.rejectResponse(e);
+      return;
     }
 
     const output: EmittedFnCall[] = [];
@@ -225,6 +230,10 @@ class ResponsesStreamAdapter {
       usage,
       sources: this.sourceExtractor ? this.sourceExtractor(output) : undefined,
     };
+  }
+
+  async abort(): Promise<void> {
+    await this.runner.abort?.();
   }
 }
 

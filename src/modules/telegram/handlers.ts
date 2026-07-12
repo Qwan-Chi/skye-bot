@@ -69,7 +69,6 @@ export interface TelegramDeps {
 }
 
 const IMAGE_CMD_RE = /^\/image(?:@\S+)?\s*([\s\S]*)$/;
-const TEXT_BURST_DELAY_MS = 1200;
 const TEXT_HISTORY_LIMIT = 40;
 const TRACKED_CHATS = new Set<number>();
 const SUPPORTED_TEXT_MIME_RE =
@@ -84,13 +83,6 @@ type ContentPart =
   | { type: "input_text"; text: string }
   | { type: "input_image"; image_url: string }
   | { type: "input_file"; file_data: string; filename: string };
-
-type QueuedTextMessage = {
-  ctx: GrammyContext & { message: Message.TextMessage };
-  tenant: ReturnType<typeof tenantFromGrammy>;
-  text: string;
-  tag: string;
-};
 
 type ImageControl = {
   prompt: string;
@@ -109,8 +101,9 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
 
   // --- per-thread serialized work queue + short burst buffer for Telegram typing ---
   const queues = new Map<string, Promise<void>>();
+  const activeTurns = new Map<string, AbortController>();
+  const chatEpochs = new Map<number, number>();
   const billingQueues = new Map<number, Promise<void>>();
-  const textBursts = new Map<string, { timer: NodeJS.Timeout; items: QueuedTextMessage[] }>();
   const imageControls = new Map<string, ImageControl>();
   // Reference images collected per-thread, consumed by the generate_image tool.
   const threadReferenceImages = new Map<string, string[]>();
@@ -370,10 +363,15 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
   };
 
   const enqueue = (key: string, job: () => Promise<void>) => {
+    const chatId = Number(key.split(":", 1)[0]);
+    const epoch = chatEpochs.get(chatId) ?? 0;
     const previous = queues.get(key) ?? Promise.resolve();
     const next = previous
       .catch(() => {})
-      .then(job)
+      .then(async () => {
+        if ((chatEpochs.get(chatId) ?? 0) !== epoch) return;
+        await job();
+      })
       .finally(() => {
         if (queues.get(key) === next) queues.delete(key);
       });
@@ -607,6 +605,21 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
 
   const allCommands: TelegramCommand[] = [
     ...contributions.commands,
+    {
+      name: "stop",
+      description: "Stop everything Skye is doing in this chat",
+      public: true,
+      handler: async (ctx, tenant) => {
+        chatEpochs.set(tenant.chatId, (chatEpochs.get(tenant.chatId) ?? 0) + 1);
+        for (const [key, controller] of activeTurns) {
+          if (key === String(tenant.chatId) || key.startsWith(`${tenant.chatId}:`)) {
+            controller.abort();
+            activeTurns.delete(key);
+          }
+        }
+        await ctx.reply("Остановилась.", { reply_to_message_id: ctx.message?.message_id });
+      },
+    },
     {
       name: "start",
       description: "Say hi and get a few starting points",
@@ -1084,12 +1097,17 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     options: { voiceReply?: boolean } = {}
   ) => {
     const t0 = Date.now();
+    const tk = threadKey(tenant);
+    const controller = new AbortController();
+    activeTurns.get(tk)?.abort();
+    activeTurns.set(tk, controller);
     const draft = createDraftManager(ctx);
     const actionTicker = createChatActionTicker(ctx, "typing");
     const toolCallHistory: ToolCallRecord[] = [];
 
     let lastDraftTs = 0;
     const onChunk = (snapshot: string) => {
+      if (tenant.chatType !== "private") return;
       const now = Date.now();
       if (now - lastDraftTs < 300) return;
       lastDraftTs = now;
@@ -1101,12 +1119,22 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     };
     const onToolCalls = (calls: ToolCallRecord[]) => {
       toolCallHistory.push(...calls);
-      void draft.send(buildDraftMarkdown(toolCallHistory, "Thinking..."));
+      const status = calls.some((call) => call.name.includes("image"))
+        ? "Создаю изображение…"
+        : calls.some((call) => call.name.startsWith("sandbox_"))
+          ? "Работаю с файлами и кодом…"
+          : calls.some((call) => call.name.includes("memory"))
+            ? "Проверяю память…"
+            : "Ищу нужную информацию…";
+      void draft.send(
+        tenant.chatType === "private" ? buildDraftMarkdown(toolCallHistory, status) : status
+      );
     };
 
     try {
       reactSafely(ctx, "👀");
       actionTicker.start();
+      void draft.send("Думаю…");
 
       // Collect media content parts from the replied-to message (photos,
       // PDFs, audio transcripts) so the model can reason about them even
@@ -1139,11 +1167,9 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
       // Resolve the user's selected model + token quota for this turn.
       const billAcc = tenant.userId ? deps.billing.getAccount(tenant.userId) : undefined;
       const modelId = billAcc?.modelId ?? deps.defaultModelId;
-      const modelEntry = deps.llm.resolveModel(modelId);
       // The user message was already persisted to chatLog above, so historyFor
       // already includes it. Do not append userItem again.
       const inputItems: ResponseInputItem[] = historyFor(tenant).slice(-20);
-      const tk = threadKey(tenant);
       const hasReferenceImages = threadReferenceImages.has(tk);
 
       // Quota pre-check: subscribers with zero tokens can't proceed.
@@ -1166,13 +1192,17 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
         }
       }
 
-      const meterUsage = (usage: { promptTokens: number; completionTokens: number }) => {
+      const meterUsage = (
+        usage: { promptTokens: number; completionTokens: number },
+        usedModelId: string
+      ) => {
         if (!hasMeteredAccess(access, tenant.userId)) return;
+        const usedModel = deps.llm.resolveModel(usedModelId);
         const r = deps.billing.charge(
           tenant.userId!,
           usage.promptTokens,
           usage.completionTokens,
-          modelEntry.multiplier
+          usedModel.multiplier
         );
         if (!r.ok) throw new Error(`Quota exhausted: ${r.reason}`);
       };
@@ -1185,32 +1215,64 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
         }
       };
 
-      const text = cleanMd(
-        await withBillingLock(tenant.userId, () =>
-          runChatLoop(
-            {
-              llm: deps.llm,
-              mcp: deps.mcp,
-              memory: deps.memory,
-              chatLog: deps.chatLog,
-              userConfig: deps.userConfig,
-              sandbox: deps.sandbox,
-              reminders: deps.reminders,
-              channel: deps.channel,
-              builtinTools,
-              hasReferenceImages,
-              modelId,
-              beforeRound: checkRoundQuota,
-              onUsage: meterUsage,
-              owner: deps.owner,
-            },
-            tenant,
-            inputItems,
-            onChunk,
-            onToolCalls
-          )
-        )
-      );
+      const runAttempt = (attemptModelId: string, tools: ToolDefinition[]) =>
+        runChatLoop(
+          {
+            llm: deps.llm,
+            mcp: deps.mcp,
+            memory: deps.memory,
+            chatLog: deps.chatLog,
+            userConfig: deps.userConfig,
+            sandbox: deps.sandbox,
+            reminders: deps.reminders,
+            channel: deps.channel,
+            builtinTools: tools,
+            allowMcpTools: tools.length > 0,
+            hasReferenceImages,
+            modelId: attemptModelId,
+            beforeRound: checkRoundQuota,
+            onUsage: meterUsage,
+            owner: deps.owner,
+          },
+          tenant,
+          inputItems,
+          onChunk,
+          onToolCalls,
+          controller.signal
+        );
+
+      const fallbackIds = deps.llm.models.map((model) => model.id).filter((id) => id !== modelId);
+      const attempts = [modelId, modelId, ...fallbackIds];
+      let rawText = "";
+      let lastAttemptError: unknown;
+      for (const attemptModelId of attempts) {
+        controller.signal.throwIfAborted();
+        try {
+          rawText = await withBillingLock(tenant.userId, () =>
+            runAttempt(attemptModelId, builtinTools)
+          );
+          if (rawText) break;
+          throw new Error("Model returned an empty response");
+        } catch (e) {
+          lastAttemptError = e;
+          if (controller.signal.aborted) throw e;
+          if (toolCallHistory.length > 0) break;
+          log.warn({ err: e, modelId: attemptModelId, chatId: tenant.chatId }, "LLM attempt failed");
+          void draft.send("Первая попытка не сработала — пробую ещё раз…");
+        }
+      }
+
+      if (!rawText) {
+        const recoveryModelId = fallbackIds[0] ?? modelId;
+        void draft.send("Пробую ответить без инструментов…");
+        try {
+          rawText = await withBillingLock(tenant.userId, () => runAttempt(recoveryModelId, []));
+        } catch (e) {
+          lastAttemptError = e;
+        }
+      }
+      if (!rawText && lastAttemptError) throw lastAttemptError;
+      const text = cleanMd(rawText);
 
       if (!text) {
         await draft.delete();
@@ -1267,12 +1329,13 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
         status: "ok",
       });
     } catch (e) {
+      if (controller.signal.aborted) return;
       const ms = Date.now() - t0;
       log.error({ ...serializeError(e), latencyMs: ms }, `${msgType} handler failed`);
       await draft.delete();
       reactSafely(ctx, "😢");
       await ctx
-        .reply("Something went wrong, please try again.", {
+        .reply(`Не смогла закончить ответ на этот запрос — все доступные попытки сорвались. Попробуй отправить его ещё раз.`, {
           reply_to_message_id: ctx.message?.message_id,
         })
         .catch(() => {});
@@ -1287,28 +1350,8 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
       });
     } finally {
       actionTicker.stop();
+      if (activeTurns.get(tk) === controller) activeTurns.delete(tk);
     }
-  };
-
-  const flushTextBurst = (key: string) => {
-    const burst = textBursts.get(key);
-    if (!burst) return;
-    clearTimeout(burst.timer);
-    textBursts.delete(key);
-    const last = burst.items[burst.items.length - 1];
-    if (!last) return;
-
-    enqueue(key, async () => {
-      const combined = burst.items.map((item) => `${item.tag}${item.text}`).join("\n");
-      const content = `${replyContext(last.ctx)}${replyImageContextNote(last.ctx)}${combined}`;
-      const userItem: ResponseInputItem = {
-        type: "message",
-        role: "user",
-        content,
-      };
-      await runLlmReply(last.ctx, last.tenant, userItem, combined, "text");
-      threadReferenceImages.delete(key);
-    });
   };
 
   // --- Text handler ---
@@ -1323,17 +1366,17 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     const refs = await collectReferenceImages(ctx);
     if (refs.length > 0) threadReferenceImages.set(tk, refs);
 
-    const existing = textBursts.get(tk);
-    if (existing) clearTimeout(existing.timer);
-    const items = existing?.items ?? [];
-    items.push({
-      ctx: ctx as GrammyContext & { message: Message.TextMessage },
-      tenant,
-      text: ctx.message.text || "",
-      tag: senderTag(ctx),
+    const text = ctx.message.text || "";
+    enqueue(tk, async () => {
+      const content = `${replyContext(ctx)}${replyImageContextNote(ctx)}${senderTag(ctx)}${text}`;
+      const userItem: ResponseInputItem = {
+        type: "message",
+        role: "user",
+        content,
+      };
+      await runLlmReply(ctx, tenant, userItem, text, "text");
+      threadReferenceImages.delete(tk);
     });
-    const timer = setTimeout(() => flushTextBurst(tk), TEXT_BURST_DELAY_MS);
-    textBursts.set(tk, { timer, items });
   });
 
   // --- Photo handler (image edit or vision) ---

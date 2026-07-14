@@ -16,7 +16,9 @@ import type { SpeechService } from "../speech/service.js";
 import type { AuditService } from "../audit/service.js";
 import type { SandboxService } from "../sandbox/service.js";
 import type { ProactiveService } from "../proactive/service.js";
-import type { RemindersService, Reminder } from "../reminders/service.js";
+import type { RemindersService } from "../reminders/service.js";
+import type { BackgroundJobsService } from "../jobs/service.js";
+import { REMINDER_DELIVERY_JOB, type ReminderDeliveryPayload } from "../reminders/scheduler.js";
 import type { ChannelService } from "../channel/service.js";
 import type { EventBus } from "../../core/events.js";
 import type { Contributions, TelegramCommand, ToolDefinition } from "../../core/module.js";
@@ -57,6 +59,7 @@ export interface TelegramDeps {
   sandbox?: SandboxService;
   proactive?: ProactiveService;
   reminders?: RemindersService;
+  jobs: BackgroundJobsService;
   channel?: ChannelService;
   events?: EventBus;
   billing: BillingService;
@@ -362,7 +365,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     },
   };
 
-  const enqueue = (key: string, job: () => Promise<void>) => {
+  const enqueue = (key: string, job: () => Promise<void>): Promise<void> => {
     const chatId = Number(key.split(":", 1)[0]);
     const epoch = chatEpochs.get(chatId) ?? 0;
     const previous = queues.get(key) ?? Promise.resolve();
@@ -377,6 +380,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
       });
     queues.set(key, next);
     void next;
+    return next;
   };
 
   const withBillingLock = async <T>(
@@ -2006,20 +2010,37 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     });
   });
 
-  // --- Reminder firing ---
-  // The reminder scheduler emits "reminders.fired" via EventBus. Here we
-  // turn it into a full agent cycle: build a system-injected user message
-  // with the reminder prompt + chat context, run the LLM loop, and send
-  // the response to the chat — exactly as if a user had spoken.
-  if (deps.events && deps.reminders) {
-    deps.events.on("reminders.fired", (payload: { reminder: Reminder }) => {
-      const { reminder } = payload;
+  // --- Persistent reminder delivery ---
+  // The scheduler only writes a durable job. This handler performs the full
+  // agent cycle and resolves only after Telegram accepted the response, so a
+  // crash or transient failure leaves a retryable record in SQLite.
+  if (deps.reminders) {
+    deps.jobs.register(REMINDER_DELIVERY_JOB, async (job) => {
+      const payload = job.payload as Partial<ReminderDeliveryPayload>;
+      const queuedReminder = payload.reminder;
+      if (!queuedReminder?.id || !queuedReminder.fireAt || !queuedReminder.chatId) {
+        throw new Error(`Invalid reminder delivery payload for job ${job.id}`);
+      }
+
+      const reminder = deps.reminders!.get(queuedReminder.id, queuedReminder.chatId);
+      if (!reminder) {
+        log.info({ jobId: job.id }, "Skipping delivery for inactive reminder");
+        return;
+      }
+      if (reminder.fireAt !== queuedReminder.fireAt) {
+        log.info(
+          { jobId: job.id, reminderId: reminder.id },
+          "Skipping superseded reminder delivery"
+        );
+        return;
+      }
+
       const tk =
         reminder.threadId != null
           ? `${reminder.chatId}:${reminder.threadId}`
           : String(reminder.chatId);
 
-      enqueue(tk, async () => {
+      await enqueue(tk, async () => {
         log.info({ id: reminder.id, chatId: reminder.chatId }, "Processing fired reminder");
 
         const tenant: TenantContext = {
@@ -2163,8 +2184,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
           );
 
           if (!text) {
-            log.warn({ id: reminder.id }, "Reminder produced no response");
-            return;
+            throw new Error("Reminder produced no response");
           }
 
           await bot.api.sendMessage(reminder.chatId, text, {
@@ -2179,14 +2199,14 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
             `[reminder reply] ${text.slice(0, 200)}`
           );
 
-          deps.events!.emit("reminders.delivered", { reminder });
+          deps.reminders!.complete(reminder);
           log.info({ id: reminder.id, chatId: reminder.chatId }, "Reminder processed");
         } catch (e) {
-          deps.events!.emit("reminders.failed", { reminder, error: fmtError(e) });
           log.error(
             { ...serializeError(e), reminderId: reminder.id },
             "Reminder processing failed"
           );
+          throw e;
         } finally {
           actionTicker.stop();
         }

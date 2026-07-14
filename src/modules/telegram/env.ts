@@ -5,6 +5,13 @@ export const telegramEnvSchema = z.object({
   // Legacy manual allow-list. Seeds the admin allowlist table once on upgrade.
   ALLOWED_IDS: z.string().default(""),
   TELEGRAM_POLLING_LOCK: z.string().default("1"),
+  TELEGRAM_DROP_PENDING_UPDATES: z.enum(["0", "1"]).default("0"),
+  TELEGRAM_JOB_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(10_000)
+    .max(15 * 60_000)
+    .default(3 * 60_000),
   TELEGRAM_MAX_ATTACHMENT_BYTES: z.coerce
     .number()
     .int()

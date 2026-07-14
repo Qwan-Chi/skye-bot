@@ -2,6 +2,13 @@ import { closeSync, fstatSync, openSync, readSync } from "fs";
 import type { SkyeModule } from "../../core/module.js";
 import type { PanelRequest } from "../panel/index.js";
 import { monitoringEnvSchema } from "./env.js";
+import { MonitoringService } from "./service.js";
+
+declare module "../../core/module.js" {
+  interface SkyeServices {
+    monitoring: MonitoringService;
+  }
+}
 
 const MAX_BYTES = 256 * 1024;
 const MAX_LINES = 250;
@@ -35,9 +42,14 @@ export const monitoringModule: SkyeModule = {
   init(ctx) {
     const outLog = ctx.config.MONITORING_OUT_LOG?.toString();
     const errorLog = ctx.config.MONITORING_ERROR_LOG?.toString();
-    const startedAt = new Date().toISOString();
+    const service = new MonitoringService(
+      ctx.db,
+      ctx.services,
+      Boolean(ctx.config.REMINDERS_ENABLED)
+    );
 
     return {
+      service,
       panelRoutes: [
         {
           method: "get",
@@ -52,8 +64,15 @@ export const monitoringModule: SkyeModule = {
 
             res.json({
               status: "ok",
-              startedAt,
+              startedAt: service.startedAt,
               uptimeSeconds: Math.floor(process.uptime()),
+              health: service.ready(),
+              telegram: ctx.services.has("telegramReliability")
+                ? ctx.services.get("telegramReliability").diagnostics()
+                : undefined,
+              reminders: ctx.services.has("reminderScheduler")
+                ? ctx.services.get("reminderScheduler").diagnostics()
+                : undefined,
               logs: { out: tail(outLog), error: tail(errorLog) },
             });
           },

@@ -17,6 +17,8 @@ declare module "../../core/events.js" {
 export class ReminderScheduler {
   private timer: NodeJS.Timeout | null = null;
   private firing = new Set<string>();
+  private lastTickAt: string | undefined;
+  private lastError: string | undefined;
 
   constructor(
     private readonly deps: {
@@ -41,14 +43,14 @@ export class ReminderScheduler {
       const retryAt = new Date(Date.now() + 60_000);
       this.deps.service.reschedule(reminder.id, retryAt);
       this.firing.delete(reminder.id);
-      log.warn({ id: reminder.id, retryAt: retryAt.toISOString(), error }, "Reminder delivery scheduled for retry");
+      log.warn(
+        { id: reminder.id, retryAt: retryAt.toISOString(), error },
+        "Reminder delivery scheduled for retry"
+      );
     });
     this.timer = setInterval(() => void this.tick(), this.settings.checkIntervalSec * 1000);
     this.timer.unref();
-    log.info(
-      { intervalSec: this.settings.checkIntervalSec },
-      "Reminder scheduler started"
-    );
+    log.info({ intervalSec: this.settings.checkIntervalSec }, "Reminder scheduler started");
   }
 
   stop(): void {
@@ -59,14 +61,17 @@ export class ReminderScheduler {
   }
 
   async tick(): Promise<void> {
+    this.lastTickAt = new Date().toISOString();
     const now = new Date();
     let due: Reminder[];
     try {
       due = this.deps.service.due(now);
     } catch (e) {
+      this.lastError = e instanceof Error ? e.message : String(e);
       log.error({ err: e }, "Reminder scheduler: failed to query due reminders");
       return;
     }
+    this.lastError = undefined;
     if (due.length === 0) return;
 
     for (const reminder of due) {
@@ -95,6 +100,22 @@ export class ReminderScheduler {
         }
       })();
     }
+  }
+
+  diagnostics(): {
+    enabled: boolean;
+    running: boolean;
+    inFlight: number;
+    lastTickAt?: string;
+    lastError?: string;
+  } {
+    return {
+      enabled: this.settings.enabled,
+      running: this.timer != null,
+      inFlight: this.firing.size,
+      ...(this.lastTickAt ? { lastTickAt: this.lastTickAt } : {}),
+      ...(this.lastError ? { lastError: this.lastError } : {}),
+    };
   }
 
   private complete(reminder: Reminder): void {

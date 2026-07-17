@@ -2,6 +2,12 @@ bot_token: "123456789:ABCdefGhIJKlmnoPQRstuVWxyz_example"
 # Prevent two local long-polling bot processes from using the same BOT_TOKEN.
 # Set to "0" only if your deployment uses another single-instance mechanism.
 telegram_polling_lock: "1"
+# Keep updates that arrived while the bot was offline. Set to "1" only for an
+# intentional one-time reset: Telegram will permanently discard that backlog.
+telegram_drop_pending_updates: "0"
+# Abort a single chat job after 3 minutes so one stuck provider call cannot
+# block every later message in the same Telegram thread.
+telegram_job_timeout_ms: 180000
 telegram_max_attachment_bytes: 26214400 # reject Telegram files larger than 25 MiB
 
 # Bot owner / author — surfaced in the system prompt so Skye knows who created

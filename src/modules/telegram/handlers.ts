@@ -19,6 +19,8 @@ import type { ProactiveService } from "../proactive/service.js";
 import type { RemindersService } from "../reminders/service.js";
 import type { BackgroundJobsService } from "../jobs/service.js";
 import { REMINDER_DELIVERY_JOB, type ReminderDeliveryPayload } from "../reminders/scheduler.js";
+import { applyReminderControl, parseReminderDuration } from "../reminders/controls.js";
+import { formatReminderTime, reminderListMarkdown } from "../reminders/presentation.js";
 import type { ChannelService } from "../channel/service.js";
 import type { EventBus } from "../../core/events.js";
 import type { Contributions, TelegramCommand, ToolDefinition } from "../../core/module.js";
@@ -46,6 +48,7 @@ import {
 } from "./helpers.js";
 import { cleanMd } from "../../utils/markdown.js";
 import { log } from "../../utils/log.js";
+import { QueueTimeoutError, type TelegramReliabilityService } from "./reliability.js";
 
 export interface TelegramDeps {
   llm: LlmClient;
@@ -68,6 +71,7 @@ export interface TelegramDeps {
   maxAttachmentBytes: number;
   webappUrl: string;
   defaultModelId: string;
+  reliability: TelegramReliabilityService;
   owner?: { name: string; tag: string };
 }
 
@@ -103,9 +107,6 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
   };
 
   // --- per-thread serialized work queue + short burst buffer for Telegram typing ---
-  const queues = new Map<string, Promise<void>>();
-  const activeTurns = new Map<string, AbortController>();
-  const chatEpochs = new Map<number, number>();
   const billingQueues = new Map<number, Promise<void>>();
   const imageControls = new Map<string, ImageControl>();
   // Reference images collected per-thread, consumed by the generate_image tool.
@@ -122,6 +123,10 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     }
   >();
   const MEDIA_GROUP_GRACE_MS = 700;
+
+  // Runs before access checks and handlers: completed updates are durable, so
+  // a restart or duplicate delivery cannot execute commands twice.
+  bot.use((ctx, next) => deps.reliability.processUpdate(ctx.update.update_id, ctx.chat?.id, next));
 
   const MENTION_RE = /(^|[^\p{L}\p{N}_])(skye|скай)(?=[^\p{L}\p{N}_]|$)/iu;
   const botUserId = () => bot.botInfo.id;
@@ -365,22 +370,9 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     },
   };
 
-  const enqueue = (key: string, job: () => Promise<void>): Promise<void> => {
+  const enqueue = (key: string, job: (signal: AbortSignal) => Promise<void>) => {
     const chatId = Number(key.split(":", 1)[0]);
-    const epoch = chatEpochs.get(chatId) ?? 0;
-    const previous = queues.get(key) ?? Promise.resolve();
-    const next = previous
-      .catch(() => {})
-      .then(async () => {
-        if ((chatEpochs.get(chatId) ?? 0) !== epoch) return;
-        await job();
-      })
-      .finally(() => {
-        if (queues.get(key) === next) queues.delete(key);
-      });
-    queues.set(key, next);
-    void next;
-    return next;
+    deps.reliability.queue.enqueue(key, chatId, job);
   };
 
   const withBillingLock = async <T>(
@@ -634,14 +626,35 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
       description: "Stop everything Skye is doing in this chat",
       public: true,
       handler: async (ctx, tenant) => {
-        chatEpochs.set(tenant.chatId, (chatEpochs.get(tenant.chatId) ?? 0) + 1);
-        for (const [key, controller] of activeTurns) {
-          if (key === String(tenant.chatId) || key.startsWith(`${tenant.chatId}:`)) {
-            controller.abort();
-            activeTurns.delete(key);
-          }
-        }
+        deps.reliability.queue.cancelChat(tenant.chatId);
         await ctx.reply("Stopped.", { reply_to_message_id: ctx.message?.message_id });
+      },
+    },
+    {
+      name: "diagnostics",
+      description: "Show Telegram processing diagnostics (admins only)",
+      public: true,
+      handler: async (ctx) => {
+        if (!deps.admin.isAdmin(ctx.from?.id)) {
+          await ctx.reply("This command is available to bot administrators only.");
+          return;
+        }
+
+        const diagnostics = deps.reliability.diagnostics();
+        const queue = diagnostics.queue;
+        const md = [
+          "## Telegram diagnostics",
+          "",
+          `Status: **${diagnostics.status}**`,
+          `API ready: **${diagnostics.apiReady ? "yes" : "no"}**`,
+          `LLM preflight: **${diagnostics.llmPreflightComplete ? "complete" : "pending"}**`,
+          `Last update: **${diagnostics.lastUpdateAt ?? "none since startup"}**`,
+          `Processed / duplicates / failed: **${diagnostics.processedUpdates} / ${diagnostics.duplicateUpdates} / ${diagnostics.failedUpdates}**`,
+          `Queue pending / active: **${queue.pendingJobs} / ${queue.activeJobs}**`,
+          `Oldest active job: **${queue.oldestActiveMs} ms**`,
+          `Timed out / cancelled: **${queue.timedOutTotal} / ${queue.cancelledTotal}**`,
+        ].join("\n");
+        await sendRichReply(ctx, md);
       },
     },
     {
@@ -982,26 +995,91 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
           return;
         }
         const reminders = deps.reminders.list(tenant.chatId);
-        if (reminders.length === 0) {
-          await sendRichReply(ctx, "_No active reminders in this chat._");
+        await sendRichReply(ctx, reminderListMarkdown(reminders));
+      },
+    },
+    {
+      name: "postpone",
+      description: "Postpone a reminder: /postpone 1 35m",
+      public: true,
+      handler: async (ctx, tenant) => {
+        if (!deps.reminders) {
+          await sendRichReply(ctx, "_Reminders are not available._");
           return;
         }
-        const rows = reminders.map((r) => {
-          const local = new Date(r.fireAt).toLocaleString("en-US", {
-            dateStyle: "medium",
-            timeStyle: "short",
-          });
-          const repeat = r.repeat !== "none" ? ` · ${r.repeat}` : "";
-          return `| \`${r.id}\` | ${local}${repeat} | ${r.prompt.slice(0, 60).replace(/\|/g, "\\|")} |`;
+        const args = ctx.match?.toString().trim() ?? "";
+        const match = args.match(/^(\d+)\s+(.+)$/);
+        const number = match ? Number(match[1]) : 0;
+        const durationMs = match ? parseReminderDuration(match[2]) : null;
+        if (!Number.isSafeInteger(number) || number < 1 || durationMs == null) {
+          await sendRichReply(
+            ctx,
+            "Usage: `/postpone <number> <duration>`, for example `/postpone 1 35m` or `/postpone 2 2h`. Maximum duration: 365 days."
+          );
+          return;
+        }
+
+        const result = applyReminderControl(deps.reminders, {
+          action: "postpone",
+          number,
+          durationMs,
+          chatId: tenant.chatId,
+          ...(tenant.userId != null ? { userId: tenant.userId } : {}),
         });
-        const md = [
-          `## Reminders (${reminders.length})`,
-          "",
-          "| ID | When | Prompt |",
-          "|---|---|---|",
-          ...rows,
-        ].join("\n");
-        await sendRichReply(ctx, md);
+        if (result.status === "not_found") {
+          await sendRichReply(
+            ctx,
+            `Reminder #${number} was not found. Use /reminders to refresh the list.`
+          );
+          return;
+        }
+        if (result.status === "forbidden") {
+          await sendRichReply(ctx, "Only the reminder creator can change it.");
+          return;
+        }
+        await sendRichReply(
+          ctx,
+          `Reminder #${number} postponed until ${formatReminderTime(result.reminder.fireAt)}.`
+        );
+      },
+    },
+    {
+      name: "delete_reminder",
+      description: "Delete a reminder: /delete_reminder 1",
+      public: true,
+      handler: async (ctx, tenant) => {
+        if (!deps.reminders) {
+          await sendRichReply(ctx, "_Reminders are not available._");
+          return;
+        }
+        const rawNumber = ctx.match?.toString().trim() ?? "";
+        const number = /^\d+$/.test(rawNumber) ? Number(rawNumber) : 0;
+        if (!Number.isSafeInteger(number) || number < 1) {
+          await sendRichReply(
+            ctx,
+            "Usage: `/delete_reminder <number>`, for example `/delete_reminder 1`."
+          );
+          return;
+        }
+
+        const result = applyReminderControl(deps.reminders, {
+          action: "delete",
+          number,
+          chatId: tenant.chatId,
+          ...(tenant.userId != null ? { userId: tenant.userId } : {}),
+        });
+        if (result.status === "not_found") {
+          await sendRichReply(
+            ctx,
+            `Reminder #${number} was not found. Use /reminders to refresh the list.`
+          );
+          return;
+        }
+        if (result.status === "forbidden") {
+          await sendRichReply(ctx, "Only the reminder creator can delete it.");
+          return;
+        }
+        await sendRichReply(ctx, `Reminder #${number} deleted.`);
       },
     },
   ];
@@ -1121,13 +1199,14 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     userItem: ResponseInputItem,
     inputText: string,
     msgType: "text" | "voice" | "photo" | "document" | "audio" | "video_note",
-    options: { voiceReply?: boolean } = {}
+    options: { voiceReply?: boolean; signal?: AbortSignal } = {}
   ) => {
     const t0 = Date.now();
     const tk = threadKey(tenant);
     const controller = new AbortController();
-    activeTurns.get(tk)?.abort();
-    activeTurns.set(tk, controller);
+    const abortFromQueue = () => controller.abort(options.signal?.reason);
+    if (options.signal?.aborted) abortFromQueue();
+    else options.signal?.addEventListener("abort", abortFromQueue, { once: true });
     const draft = createDraftManager(ctx);
     const actionTicker = createChatActionTicker(ctx, "typing");
     const toolCallHistory: ToolCallRecord[] = [];
@@ -1372,7 +1451,16 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
         toolCalls: toolCallHistory,
       });
     } catch (e) {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) {
+        if (options.signal?.reason instanceof QueueTimeoutError) {
+          await ctx
+            .reply("This request took too long and was stopped. Please send it again.", {
+              reply_to_message_id: ctx.message?.message_id,
+            })
+            .catch(() => {});
+        }
+        return;
+      }
       const ms = Date.now() - t0;
       log.error({ ...serializeError(e), latencyMs: ms }, `${msgType} handler failed`);
       await draft.delete();
@@ -1398,7 +1486,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
       });
     } finally {
       actionTicker.stop();
-      if (activeTurns.get(tk) === controller) activeTurns.delete(tk);
+      options.signal?.removeEventListener("abort", abortFromQueue);
     }
   };
 
@@ -1415,14 +1503,14 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     if (refs.length > 0) threadReferenceImages.set(tk, refs);
 
     const text = ctx.message.text || "";
-    enqueue(tk, async () => {
+    enqueue(tk, async (signal) => {
       const content = `${replyContext(ctx)}${replyImageContextNote(ctx)}${senderTag(ctx)}${text}`;
       const userItem: ResponseInputItem = {
         type: "message",
         role: "user",
         content,
       };
-      await runLlmReply(ctx, tenant, userItem, text, "text");
+      await runLlmReply(ctx, tenant, userItem, text, "text", { signal });
       threadReferenceImages.delete(tk);
     });
   });
@@ -1479,7 +1567,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     }
     const replyRefs = await collectReferenceImages(ctx);
     if (replyRefs.length > 0) threadReferenceImages.set(tk, replyRefs);
-    enqueue(tk, async () => {
+    enqueue(tk, async (signal) => {
       try {
         const file = await ctx.api.getFile(ctx.message.photo.pop()!.file_id);
         const telegramUrl = `https://api.telegram.org/file/bot${deps.botToken}/${file.file_path}`;
@@ -1497,7 +1585,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
           role: "user",
           content: contentParts as never,
         };
-        await runLlmReply(ctx, tenant, userItem, textPart, "photo");
+        await runLlmReply(ctx, tenant, userItem, textPart, "photo", { signal });
         threadReferenceImages.delete(tk);
       } catch (e) {
         log.error({ ...serializeError(e) }, "Photo preparation failed");
@@ -1554,7 +1642,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     const allRefs = [...replyRefs, ...photoUrls];
     if (allRefs.length > 0) threadReferenceImages.set(tk, allRefs);
 
-    enqueue(tk, async () => {
+    enqueue(tk, async (signal) => {
       try {
         const tag = senderTag(captionCtx ?? ctxs[0]);
         const contentParts: { type: string; text?: string; image_url?: string }[] = [];
@@ -1570,7 +1658,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
           role: "user",
           content: contentParts as never,
         };
-        await runLlmReply(captionCtx ?? ctxs[0], tenant, userItem, textPart, "photo");
+        await runLlmReply(captionCtx ?? ctxs[0], tenant, userItem, textPart, "photo", { signal });
         threadReferenceImages.delete(tk);
       } catch (e) {
         log.error({ ...serializeError(e) }, "Media group preparation failed");
@@ -1697,7 +1785,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
 
     const tenant = tenantFromGrammy(ctx);
     const tk = threadKey(tenant);
-    enqueue(tk, async () => {
+    enqueue(tk, async (signal) => {
       try {
         await ctx.api.sendChatAction(tenant.chatId, "typing");
         const file = await ctx.api.getFile(ctx.message.voice.file_id);
@@ -1726,7 +1814,10 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
           role: "user",
           content,
         };
-        await runLlmReply(ctx, tenant, userItem, recognized, "voice", { voiceReply: true });
+        await runLlmReply(ctx, tenant, userItem, recognized, "voice", {
+          voiceReply: true,
+          signal,
+        });
       } catch (e) {
         log.error({ ...serializeError(e) }, "Voice preparation failed");
         await ctx
@@ -1752,7 +1843,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
     const tenant = tenantFromGrammy(ctx);
     const tk = threadKey(tenant);
 
-    enqueue(tk, async () => {
+    enqueue(tk, async (signal) => {
       try {
         await ctx.api.sendChatAction(tenant.chatId, "upload_document");
 
@@ -1784,7 +1875,9 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
             role: "user",
             content: contentParts as never,
           };
-          await runLlmReply(ctx, tenant, userItem, `${prompt}\n${filename}`, "document");
+          await runLlmReply(ctx, tenant, userItem, `${prompt}\n${filename}`, "document", {
+            signal,
+          });
           return;
         }
 
@@ -1814,7 +1907,14 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
           role: "user",
           content,
         };
-        await runLlmReply(ctx, tenant, userItem, `${prompt}\n${filename}\n${fileText}`, "document");
+        await runLlmReply(
+          ctx,
+          tenant,
+          userItem,
+          `${prompt}\n${filename}\n${fileText}`,
+          "document",
+          { signal }
+        );
       } catch (e) {
         log.error({ ...serializeError(e) }, "Document preparation failed");
         await ctx
@@ -1833,7 +1933,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
 
     const tenant = tenantFromGrammy(ctx);
     const tk = threadKey(tenant);
-    enqueue(tk, async () => {
+    enqueue(tk, async (signal) => {
       if (!deps.speech.isSttAvailable()) {
         await ctx.reply("Audio recognition is not configured.", {
           reply_to_message_id: ctx.message.message_id,
@@ -1854,7 +1954,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
         const prompt = captionRaw || "Please answer based on this audio transcript.";
         const content = `${replyContext(ctx)}${senderTag(ctx)}${prompt}\n\nAudio transcript:\n${recognized}`;
         const userItem: ResponseInputItem = { type: "message", role: "user", content };
-        await runLlmReply(ctx, tenant, userItem, `${prompt}\n${recognized}`, "audio");
+        await runLlmReply(ctx, tenant, userItem, `${prompt}\n${recognized}`, "audio", { signal });
       } catch (e) {
         log.error({ ...serializeError(e) }, "Audio preparation failed");
         await ctx.reply("Failed to process the audio file.", {
@@ -1869,7 +1969,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
 
     const tenant = tenantFromGrammy(ctx);
     const tk = threadKey(tenant);
-    enqueue(tk, async () => {
+    enqueue(tk, async (signal) => {
       if (!deps.speech.isSttAvailable()) {
         await ctx.reply("Video-note transcription is not configured.", {
           reply_to_message_id: ctx.message.message_id,
@@ -1889,7 +1989,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
         }
         const content = `${replyContext(ctx)}${senderTag(ctx)}Video note transcript:\n${recognized}`;
         const userItem: ResponseInputItem = { type: "message", role: "user", content };
-        await runLlmReply(ctx, tenant, userItem, recognized, "video_note");
+        await runLlmReply(ctx, tenant, userItem, recognized, "video_note", { signal });
       } catch (e) {
         log.error({ ...serializeError(e) }, "Video-note preparation failed");
         await ctx.reply("Failed to process the video note.", {
@@ -1939,8 +2039,9 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
 
     const action = ctx.match[1];
     await ctx.answerCallbackQuery("Working on it");
-    enqueue(threadKey(tenant), async () => {
+    enqueue(threadKey(tenant), async (signal) => {
       try {
+        signal.throwIfAborted();
         await ctx.api.sendChatAction(tenant.chatId, "upload_photo");
         if (action === "prompt") {
           const promptRes = await deps.llm.ask(
@@ -1973,6 +2074,7 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
           nextPrompt,
           sourceImageUrl ? [sourceImageUrl] : undefined
         );
+        signal.throwIfAborted();
         if (!buffer) {
           await ctx.reply("No image was generated. Try another variation.", {
             reply_to_message_id: messageId,
@@ -2040,7 +2142,8 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
           ? `${reminder.chatId}:${reminder.threadId}`
           : String(reminder.chatId);
 
-      await enqueue(tk, async () => {
+      await deps.reliability.queue.enqueueAndWait(tk, reminder.chatId, async (signal) => {
+        signal.throwIfAborted();
         log.info({ id: reminder.id, chatId: reminder.chatId }, "Processing fired reminder");
 
         const tenant: TenantContext = {
@@ -2178,7 +2281,10 @@ export function installTelegram(bot: Bot, deps: TelegramDeps, contributions: Con
                   owner: deps.owner,
                 },
                 tenant,
-                inputItems
+                inputItems,
+                undefined,
+                undefined,
+                signal
               )
             )
           );

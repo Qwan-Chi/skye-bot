@@ -10,6 +10,8 @@ export interface ReminderDeliveryPayload {
 
 export class ReminderScheduler {
   private timer: NodeJS.Timeout | null = null;
+  private lastTickAt: string | undefined;
+  private lastError: string | undefined;
 
   constructor(
     private readonly deps: {
@@ -40,10 +42,13 @@ export class ReminderScheduler {
   }
 
   tick(now: Date = new Date()): void {
+    this.lastTickAt = now.toISOString();
     let due: Reminder[];
     try {
       due = this.deps.service.due(now);
+      this.lastError = undefined;
     } catch (error) {
+      this.lastError = error instanceof Error ? error.message : String(error);
       log.error({ error }, "Reminder scheduler failed to query due reminders");
       return;
     }
@@ -71,6 +76,22 @@ export class ReminderScheduler {
         );
       }
     }
+  }
+
+  diagnostics(): {
+    enabled: boolean;
+    running: boolean;
+    inFlight: number;
+    lastTickAt?: string;
+    lastError?: string;
+  } {
+    return {
+      enabled: this.settings.enabled,
+      running: this.timer != null,
+      inFlight: this.deps.jobs.diagnostics().running,
+      ...(this.lastTickAt ? { lastTickAt: this.lastTickAt } : {}),
+      ...(this.lastError ? { lastError: this.lastError } : {}),
+    };
   }
 }
 

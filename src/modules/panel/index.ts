@@ -28,8 +28,13 @@ export const panelModule: SkyeModule = {
     // Import accepts up to 1000 memories, each capped by the memory service.
     app.use(express.json({ limit: "3mb" }));
 
-    app.get("/healthz", (_req: Request, res: Response) => {
-      res.json({ status: "ok", uptimeSeconds: Math.floor(process.uptime()) });
+    const monitoring = ctx.services.get("monitoring");
+    app.get(["/healthz", "/health/live"], (_req: Request, res: Response) => {
+      res.json(monitoring.live());
+    });
+    app.get("/health/ready", (_req: Request, res: Response) => {
+      const report = monitoring.ready();
+      res.status(report.status === "ok" ? 200 : 503).json(report);
     });
 
     // Auth middleware — populates req.tenant from validated initData.

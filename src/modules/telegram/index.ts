@@ -13,20 +13,25 @@ import { dirname, join } from "path";
 import type { SkyeModule } from "../../core/module.js";
 import { telegramEnvSchema } from "./env.js";
 import { installTelegram } from "./handlers.js";
+import { migrations } from "./migrations.js";
+import { TelegramReliabilityService } from "./reliability.js";
 import { log } from "../../utils/log.js";
 
 let botRef: Bot | null = null;
+let reliabilityRef: TelegramReliabilityService | null = null;
 let releasePollingLock: (() => void) | null = null;
 
 declare module "../../core/module.js" {
   interface SkyeServices {
     telegramBot: Bot;
+    telegramReliability: TelegramReliabilityService;
   }
 }
 
 export const telegramModule: SkyeModule = {
   name: "telegram",
   envSchema: telegramEnvSchema,
+  migrations,
   async init(ctx) {
     const token = String(ctx.config.BOT_TOKEN);
     const bot = new Bot(token);
@@ -35,14 +40,27 @@ export const telegramModule: SkyeModule = {
     // resolves in other modules (billing routes, channel tools, panel, etc.).
     // Returning { service } would instead key it as "telegram" (the module name).
     ctx.services.set("telegramBot", bot);
+    const reliability = new TelegramReliabilityService(
+      ctx.db,
+      Number(ctx.config.TELEGRAM_JOB_TIMEOUT_MS)
+    );
+    reliabilityRef = reliability;
+    ctx.services.set("telegramReliability", reliability);
   },
   async start(ctx, contributions, extra) {
     const bot = botRef!;
+    const reliability = reliabilityRef!;
     extra.bot = bot;
 
-    // Pre-flight: probe model capability before serving requests.
+    // Validate the Telegram token and cache botInfo before accepting updates.
+    await bot.init();
+    reliability.markApiReady(bot.botInfo.username);
+
+    // Pre-flight: probe model capability before serving requests. This probe is
+    // intentionally advisory; providers may not expose /models even when chat works.
     const llm = ctx.services.get("llm");
     await llm.checkCapabilities();
+    reliability.markLlmPreflightComplete();
 
     installTelegram(
       bot,
@@ -67,6 +85,7 @@ export const telegramModule: SkyeModule = {
         maxAttachmentBytes: Number(ctx.config.TELEGRAM_MAX_ATTACHMENT_BYTES),
         webappUrl: String(ctx.config.PANEL_WEBAPP_URL),
         defaultModelId: String(ctx.config.DEFAULT_MODEL_ID ?? "sydney"),
+        reliability,
         ...(String(ctx.config.OWNER_NAME ?? "") || String(ctx.config.OWNER_TAG ?? "")
           ? { owner: { name: String(ctx.config.OWNER_NAME), tag: String(ctx.config.OWNER_TAG) } }
           : {}),
@@ -88,7 +107,10 @@ export const telegramModule: SkyeModule = {
       releasePollingLock = acquirePollingLock(String(ctx.config.BOT_TOKEN));
     }
 
-    void bot.start({ drop_pending_updates: true }).catch((e) => {
+    reliability.markPolling();
+    const dropPendingUpdates = String(ctx.config.TELEGRAM_DROP_PENDING_UPDATES ?? "0") === "1";
+    void bot.start({ drop_pending_updates: dropPendingUpdates }).catch((e) => {
+      reliability.markStopped();
       releasePollingLock?.();
       releasePollingLock = null;
       if (isGetUpdatesConflict(e)) {
@@ -104,14 +126,16 @@ export const telegramModule: SkyeModule = {
       }
       setTimeout(() => process.exit(1), 100).unref();
     });
-    log.info("Skye is alive");
+    log.info({ dropPendingUpdates }, "Skye is alive");
   },
   async shutdown() {
+    reliabilityRef?.markStopped();
     if (botRef) {
       await botRef.stop().catch(() => {});
     }
     releasePollingLock?.();
     releasePollingLock = null;
+    reliabilityRef = null;
   },
 };
 

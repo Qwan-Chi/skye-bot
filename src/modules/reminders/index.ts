@@ -8,6 +8,7 @@ import { reminderTools } from "./tools.js";
 declare module "../../core/module.js" {
   interface SkyeServices {
     reminders: RemindersService;
+    reminderScheduler: ReminderScheduler;
   }
 }
 
@@ -30,6 +31,7 @@ export const remindersModule: SkyeModule = {
       }
     );
     schedulerRef = scheduler;
+    ctx.services.set("reminderScheduler", scheduler);
 
     return {
       service: remindersService,

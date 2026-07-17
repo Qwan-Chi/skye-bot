@@ -19,12 +19,23 @@ Real environment variables override YAML values — useful for platform-injected
 | `admin_ids`                     | Comma-separated Telegram **user** IDs that administer the bot (free, unlimited access + `/allow`/`/ban` commands).           |
 | `allowed_ids`                   | _(Legacy)_ Comma-separated chat/user IDs. Seeded into the allowlist once on upgrade; afterwards manage access with `/allow`. |
 | `telegram_polling_lock`         | Set to `"0"` to disable the single-instance polling lock. Default: `"1"`.                                                    |
-| `telegram.max_attachment_bytes` | Maximum Telegram file/image download size. Default: `26214400` (25 MiB).                                                     |
+| `telegram_drop_pending_updates` | Set to `"1"` only for an intentional one-time backlog reset. Default: `"0"`, so updates received during downtime are kept.   |
+| `telegram_job_timeout_ms`       | Maximum processing time for one queued chat job. Default: `180000` (3 minutes).                                              |
+| `telegram_max_attachment_bytes` | Maximum Telegram file/image download size. Default: `26214400` (25 MiB).                                                     |
 | `owner.name`                    | Bot owner/author display name. Surfaced in the system prompt so Skye weights their messages above others.                    |
 | `owner.tag`                     | Bot owner's Telegram username (without `@`). Paired with `owner.name`.                                                       |
 | `use_chat_completions`          | Set to `true` if your provider doesn't support the Responses API. Default: `false`.                                          |
 | `log_level`                     | Pino log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal`. Default: `info`.                                         |
 | `db_path`                       | SQLite database path. Default: `data/skye.db`. Supports `:memory:` for ephemeral storage.                                    |
+
+### Health checks and diagnostics
+
+The panel server exposes lightweight operational probes:
+
+- `GET /health/live` (and the legacy alias `GET /healthz`) reports whether the process is running.
+- `GET /health/ready` reports HTTP `200` only after SQLite, Telegram polling, the LLM preflight, and the enabled reminder scheduler are ready. It returns `503` with per-component checks while startup is incomplete or a required component is unavailable.
+
+Bot administrators can also use `/diagnostics` in Telegram to inspect update counters, duplicate suppression, queue depth, active-job age, timeouts, and cancellations. These counters cover the current process lifetime; completed Telegram update IDs are retained in SQLite to prevent duplicate handling after a restart.
 
 ### Models (masked catalog)
 
